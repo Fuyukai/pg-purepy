@@ -20,13 +20,6 @@ from pg_purepy.protocol import (
 )
 
 
-class SimpleQuery(object):
-    """"""
-
-    def __init__(self, conn: AsyncPostgresConnection):
-        self._conn = conn
-
-
 class AsyncPostgresConnection(object):
     """
     An asynchronous connection to a PostgreSQL server. This class should not be directly
