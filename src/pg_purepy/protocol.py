@@ -13,8 +13,12 @@ from itertools import count
 from typing import Union, Optional, Callable, Dict
 
 import attr
-from pg_purepy.converters import Converter, DEFAULT_CONVERTERS, ConversionContext, \
-    DEFAULT_TEXT_CONVERTER
+from pg_purepy.converters import (
+    Converter,
+    DEFAULT_CONVERTERS,
+    ConversionContext,
+    DEFAULT_TEXT_CONVERTER,
+)
 from pg_purepy.exc import (
     MissingPasswordError,
     ProtocolParseError,
@@ -31,7 +35,11 @@ from pg_purepy.messages import (
     ReadyForQueryState,
     ReadyForQuery,
     PostgresMessage,
-    CommandComplete, RowDescription, ColumnDescription, DataRow, BackendKeyData,
+    CommandComplete,
+    RowDescription,
+    ColumnDescription,
+    DataRow,
+    BackendKeyData,
 )
 from pg_purepy.util import unpack_strings, pack_strings, Buffer
 from scramp import ScramClient
@@ -414,8 +422,11 @@ class ProtocolMachine(object):
             format_code = body.read_short()
 
             desc = ColumnDescription(
-                name=name, table_oid=table_oid, column_index=column_idx,
-                type_oid=type_oid, column_length=type_size,
+                name=name,
+                table_oid=table_oid,
+                column_index=column_idx,
+                type_oid=type_oid,
+                column_length=type_size,
                 type_modifier=type_mod,
             )
             fields.append(desc)
@@ -543,7 +554,9 @@ class ProtocolMachine(object):
 
     @unrecoverable_error
     def _handle_during_AUTHENTICATED_WAITING_FOR_COMPLETION(
-        self, code: BackendMessageCode, body: Buffer,
+        self,
+        code: BackendMessageCode,
+        body: Buffer,
     ):
         """
         Handles incoming messages once we've authenticated.
@@ -607,8 +620,9 @@ class ProtocolMachine(object):
             raise ProtocolParseError(f"Expected DataRow or CommandComplete, got {code!r}")
 
     @unrecoverable_error
-    def _handle_during_SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE(self, code: BackendMessageCode,
-                                                              body: Buffer):
+    def _handle_during_SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE(
+        self, code: BackendMessageCode, body: Buffer
+    ):
         """
         Waits for the ReadyForQuery response, or the next row description if this was a multi-query.
         """
@@ -739,7 +753,7 @@ class ProtocolMachine(object):
 
             code = self._buffer[0]
             size = int.from_bytes(self._buffer[1:5], byteorder="big") - 4
-            message_data = self._buffer[5: size + 5]
+            message_data = self._buffer[5 : size + 5]
 
             if len(message_data) < size:
                 self._logger.debug(
@@ -756,7 +770,7 @@ class ProtocolMachine(object):
             else:
                 # yes enough data, set the buffer to the data after the size bytes for future
                 # processing
-                self._buffer = self._buffer[size + 5:]
+                self._buffer = self._buffer[size + 5 :]
 
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")
@@ -810,8 +824,8 @@ class ProtocolMachine(object):
             inner_passsword = md5(self._password.encode("utf-8") + self.username.encode("utf-8"))
             encoded_password = (
                 md5(inner_passsword.hexdigest().encode("ascii") + self._auth_request.md5_salt)
-                    .hexdigest()
-                    .encode("ascii")
+                .hexdigest()
+                .encode("ascii")
             )
             packet_body += b"md5"
             packet_body += encoded_password

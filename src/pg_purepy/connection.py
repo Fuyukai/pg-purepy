@@ -21,9 +21,7 @@ from pg_purepy.protocol import (
 
 
 class SimpleQuery(object):
-    """
-
-    """
+    """"""
 
     def __init__(self, conn: AsyncPostgresConnection):
         self._conn = conn

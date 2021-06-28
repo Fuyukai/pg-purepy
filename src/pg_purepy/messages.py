@@ -50,6 +50,7 @@ class BackendKeyData(PostgresMessage):
     """
     Misc data used for cancellation.
     """
+
     #: The PID of this connection.
     pid: int = attr.ib()
 
@@ -127,6 +128,7 @@ class ColumnDescription:
     """
     A description of a column.
     """
+
     #: The name of this column.
     name: str = attr.ib()
 
@@ -158,6 +160,7 @@ class RowDescription(QueryResultMessage):
     """
     Describes the rows of a query.
     """
+
     columns: List[ColumnDescription] = attr.ib()
 
 
@@ -167,6 +170,7 @@ class DataRow(QueryResultMessage):
     A singular data row. This contains a :class:`.RowDescription` and a list of converted data
     values.
     """
+
     #: The :class:`.RowDescription` that describes the data within this row.
     description: RowDescription = attr.ib()
 

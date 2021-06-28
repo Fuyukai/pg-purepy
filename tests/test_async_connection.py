@@ -3,8 +3,14 @@ from contextlib import asynccontextmanager
 from typing import AsyncContextManager
 
 import pytest
-from pg_purepy import MissingPasswordError, InvalidPasswordError, RowDescription, DataRow, \
-    CommandComplete, DatabaseError
+from pg_purepy import (
+    MissingPasswordError,
+    InvalidPasswordError,
+    RowDescription,
+    DataRow,
+    CommandComplete,
+    DatabaseError,
+)
 from pg_purepy.connection import open_database_connection, AsyncPostgresConnection
 
 from tests.util import open_connection, POSTGRES_ADDRESS, POSTGRES_USERNAME
@@ -108,5 +114,3 @@ async def test_multiple_queries_one_message():
         assert isinstance(row2, DataRow)
         assert row1.data[0] == 1
         assert row2.data[0] == 2
-
-
