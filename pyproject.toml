@@ -1,0 +1,32 @@
+[tool.black]
+line-length = 100
+
+[tool.poetry]
+name = "pg-purepy"
+version = "0.7.0"
+description = "A pure-Python anyio-based PostgreSQL adapter."
+authors = ["Lura Skye <l@veriny.tf>"]
+license = "LGPL-3.0-or-later"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+anyio = "^3.1.0"
+scramp = "^1.4.0"
+attrs = "^21.2.0"
+pendulum = "^2.1.2"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.4"
+Sphinx = ">=3.0,<4.0"
+sphinxcontrib-trio = "^1.1.2"
+sphinx-autodoc-typehints = "^1.12.0"
+trio = "^0.19.0"
+pytest-trio = "^0.7.0"
+
+[tool.pytest.ini_options]
+trio_mode = true
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+

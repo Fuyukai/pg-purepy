@@ -1,0 +1,17 @@
+syntax: glob
+
+# poetry virtual environment
+.venv/
+
+# IDE stuff
+.idea/
+.vscode/
+
+# sphinx output
+docs/_build/*
+
+# pytest output
+.pytest_cache
+
+# nothing to see here :)
+aaaa.py
