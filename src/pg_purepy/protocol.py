@@ -7,12 +7,10 @@ import enum
 import functools
 import logging
 import struct
-from collections import deque
 from hashlib import md5
-from itertools import count
-from typing import Union, Optional, Callable, Dict
+from itertools import count as it_count
+from typing import Union, Optional, Callable, Dict, Any, List
 
-import attr
 from pg_purepy.converters import (
     Converter,
     DEFAULT_CONVERTERS,
@@ -40,8 +38,12 @@ from pg_purepy.messages import (
     ColumnDescription,
     DataRow,
     BackendKeyData,
+    ParseComplete,
+    PreparedStatementInfo,
+    ParameterDescription,
+    BindComplete,
 )
-from pg_purepy.util import unpack_strings, pack_strings, Buffer
+from pg_purepy.util import pack_strings, Buffer
 from scramp import ScramClient
 
 # static messages with no params
@@ -49,7 +51,6 @@ FLUSH_MESSAGE = b"H\x00\x00\x00\x04"
 SYNC_MESSAGE = b"S\x00\x00\x00\x04"
 TERMINATE_MESSAGE = b"X\x00\x00\x00\x04"
 COPY_DONE_MESSAGE = b"c\x00\x00\x00\x04"
-EXECUTE_MESSAGE = b"E\x00\x00\x00\t\x00\x00\x00\x00\x00"
 SSL_MESSAGE = b"\x00\x00\x00\x08\x04\xd2\x16/"
 
 
@@ -119,7 +120,7 @@ def unrecoverable_error(
     def wrapper(self: ProtocolMachine, code: BackendMessageCode, body: Buffer):
         if code == BackendMessageCode.ERROR_RESPONSE:
             self.state = ProtocolState.UNRECOVERABLE_ERROR
-            error = self._decode_error_response(body)
+            error = self._decode_error_response(body, recoverable=False)
             self._logger.fatal(f"Unrecoverable error: {error.severity}: {error.message}")
             return error
 
@@ -191,15 +192,49 @@ class ProtocolState(enum.Enum):
     #: the Ready for Query message.
     SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE = 102
 
-    #: During a simple query, the backend returned an error, signifying something wrong with our
-    #: query. We're waiting for the Ready For Query message.
-    SIMPLE_QUERY_ERRORED = 103
+    ## Extended query states.
 
+    #: We've sent a Parse+Describe message to the server, and are waiting for a ParseComplete
+    # message.
+    MULTI_QUERY_SENT_PARSE_DESCRIBE = 300
+
+    #: We've received a ParseComplete, and are waiting for the ParameterDescription+RowDescription
+    #: messages.
+    MULTI_QUERY_RECEIVED_PARSE_COMPLETE = 301
+
+    #: We've received a ParameterDescription, and are waiting for a RowDescription. This state
+    #: may be skipped.
+    MULTI_QUERY_RECEIVED_PARAMETER_DESCRIPTION = 302
+
+    #: We've received our RowDescription, and are waiting for the ReadyForQuery message.
+    MULTI_QUERY_DESCRIBE_SYNC = 303
+
+    #: We've sent a Bind message, and are waiting for a BindComplete.
+    MULTI_QUERY_SENT_BIND = 310
+
+    #: We've received a BindComplete or have unsuspended the portal, and are waiting for the data
+    #: row messages.
+    MULTI_QUERY_READING_DATA_ROWS = 311
+
+    #: We've received a PortalSuspended message, and need to send another Execute.
+    MULTI_QUERY_RECEIVED_PORTAL_SUSPENDED = 312
+
+    #: We've received a CommandComplete messagee, and we are waiting for the ReadyForQuery
+    #: message.
+    MULTI_QUERY_RECEIVED_COMMAND_COMPLETE = 313
+
+    ## Misc states.
     #: We're ready to send queries to the server. This is the state inbetween everything happening.
     READY_FOR_QUERY = 999
 
     #: An unrecoverable error has happened, and the protocol will no longer work.
     UNRECOVERABLE_ERROR = 1000
+
+    #: A recoverable error has happened, and the protocol is waiting for a ReadyForQuery message.
+    RECOVERABLE_ERROR = 1001
+
+    #: The connection has been terminated.
+    TERMINATED = 9999
 
 
 # noinspection PyMethodMayBeStatic
@@ -208,35 +243,9 @@ class ProtocolMachine(object):
     Sans-I/O state machine for the PostgreSQL C<->S protocol. This operates as an in-memory buffer
     that takes in Python-side structures and turns them into bytes to be sent to the server, and
     receives bytes from the server and turns them into Python-side structures.
-
-    **Core usage:**
-
-    1. Call ``do_<method>`` where ``<method>`` is the thing you want to do.
-    2. Send the bytes returned to the PostgreSQL server.
-    3. Read from the PostgreSQL server.
-    4. Feed the read bytes using :meth:`.ProtocolMachine.receive_bytes`.
-    5. Call :meth:`.ProtocolMachine.next_event` until it returns ``NEED_DATA``.
-
-    How you handle the events returned from ``next_event`` is up to you.
-
-    **Authentication:**
-
-    Authentication is handled within the protocol machine slightly differently. If
-    :meth:`.next_event` returns :class:`.AuthenticationRequest`, the loop should look like this:
-
-    .. code-block:: python3
-
-        while not protocol.is_authenticated():
-            to_send = protocol.do_authentication()
-
-            send_data(to_send)
-            data = read_data()
-            protocol.receive_bytes(data)
-
-    Once the loop exits, the connection is authenticated.
     """
 
-    _LOGGER_COUNTER = count()
+    _LOGGER_COUNTER = it_count()
 
     PROTOCOL_MAJOR = 3
     PROTOCOL_MINOR = 0
@@ -273,6 +282,9 @@ class ProtocolMachine(object):
         #: The converter classes used to convert between PostgreSQL and Python types.
         self.converters: Dict[int, Converter] = {i.oid: i for i in DEFAULT_CONVERTERS}
 
+        #: Boolean value for if the current connection is in a transaction.
+        self.in_transaction: bool = False
+
         # used for converters, and stores some parameter data so we dont have to update it in two
         # places.
         self._conversion_context = ConversionContext(client_encoding="UTF8")
@@ -280,6 +292,14 @@ class ProtocolMachine(object):
 
         # used when decoding data rows. unset by CommandComplete.
         self._last_row_description: Optional[RowDescription] = None
+
+        # used in two places:
+        # 1) when a prepared statement is sent, we cache the name so we can return the ParseComplete
+        # 2) when a describe is sent, we cache the name to be used in the resulting object
+        self._last_named_query: Optional[str] = None
+
+        # used when a Describe message arrives.
+        self._last_parameter_oids: List[int] = []
 
         # stored data used for generating various packets
         self.username = username
@@ -370,12 +390,12 @@ class ProtocolMachine(object):
 
         return ParameterStatus(name, value)
 
-    def _decode_error_response(self, body: Buffer) -> ErrorResponse:
+    def _decode_error_response(self, body: Buffer, *, recoverable: bool) -> ErrorResponse:
         """
         Decodes an error response, returning the :class:`.ErrorResponse` containing all the fields
         from the message.
         """
-        kwargs = {}
+        kwargs = {"recoverable": recoverable}
 
         while body:
             try:
@@ -552,6 +572,28 @@ class ProtocolMachine(object):
     _handle_during_MD5_SENT = _generic_auth_handle
     _handle_during_SASL_FINAL_SENT = _generic_auth_handle
 
+    def _got_ready_for_query(self, body: Buffer):
+        """
+        Helper function used when a ReadyForQuery is received.
+        """
+        self.state = ProtocolState.READY_FOR_QUERY
+        rfqs = ReadyForQueryState(body.read_byte())
+        self.in_transaction = rfqs != ReadyForQueryState.IDLE
+
+        self._last_row_description = None  # common reset
+
+        return ReadyForQuery(rfqs)
+
+    @unrecoverable_error
+    def _handle_ready_for_query(self, code: BackendMessageCode, body: Buffer):
+        """
+        Generic handler for when the server is ready for query.
+        """
+        if code == BackendMessageCode.READY_FOR_QUERY:
+            return self._got_ready_for_query(body)
+
+        raise ProtocolParseError(f"Expected ReadyForQuery, got {code!r}")
+
     @unrecoverable_error
     def _handle_during_AUTHENTICATED_WAITING_FOR_COMPLETION(
         self,
@@ -562,14 +604,13 @@ class ProtocolMachine(object):
         Handles incoming messages once we've authenticated.
         """
         if code == BackendMessageCode.READY_FOR_QUERY:
-            self.state = ProtocolState.READY_FOR_QUERY
-            state = ReadyForQueryState(body.read_byte())
+            return self._got_ready_for_query(body)
 
-            return ReadyForQuery(state)
         elif code == BackendMessageCode.BACKEND_KEY_DATA:
             pid = body.read_int()
             key = body.read_int()
             return BackendKeyData(pid, key)
+
         else:
             raise ProtocolParseError(f"Expected ReadyForQuery, got {code!r}")
 
@@ -593,8 +634,8 @@ class ProtocolMachine(object):
 
         elif code == BackendMessageCode.ERROR_RESPONSE:
             # this is a recoverable error, and simply moves onto the ReadyForQuery message.
-            self.state = ProtocolState.SIMPLE_QUERY_ERRORED
-            error = self._decode_error_response(body)
+            self.state = ProtocolState.RECOVERABLE_ERROR
+            error = self._decode_error_response(body, recoverable=True)
             self._logger.warning(f"Error during query: {error.severity}: {error.message}")
             return error
 
@@ -631,22 +672,109 @@ class ProtocolMachine(object):
             return self._got_row_description(body)
 
         elif code == BackendMessageCode.READY_FOR_QUERY:
-            self.state = ProtocolState.READY_FOR_QUERY
-            return ReadyForQuery(ReadyForQueryState(body.read_byte()))
+            return self._got_ready_for_query(body)
 
         raise ProtocolParseError(f"Unexpected message {code!r}")
 
-    @unrecoverable_error
-    def _handle_during_SIMPLE_QUERY_ERRORED(self, code: BackendMessageCode, body: Buffer):
-        """
-        Waits for the ReadyForQuery response.
-        """
-        if code == BackendMessageCode.READY_FOR_QUERY:
-            self._last_row_description = None
-            self.state = ProtocolState.READY_FOR_QUERY
-            return ReadyForQuery(ReadyForQueryState(body.read_byte()))
+    _handle_during_SIMPLE_QUERY_ERRORED = _handle_ready_for_query
 
-        raise ProtocolParseError(f"Expected ReadyForQuery, got {code!r}")
+    ### Multi query, Prepared Statements ###
+    def _handle_during_MULTI_QUERY_SENT_PARSE_DESCRIBE(
+        self, code: BackendMessageCode, body: Buffer
+    ):
+        """
+        Waits for the ParseComplete response.
+        """
+        if code == BackendMessageCode.PARSE_COMPLETE:
+            self.state = ProtocolState.MULTI_QUERY_RECEIVED_PARSE_COMPLETE
+            lnq, self._last_named_query = self._last_named_query, None
+            return ParseComplete(lnq)
+
+        elif code == BackendMessageCode.ERROR_RESPONSE:
+            # bad query
+            self.state = ProtocolState.RECOVERABLE_ERROR
+            return self._decode_error_response(body, recoverable=True)
+
+        raise ProtocolParseError(f"Expected ParseComplete, got {code!r}")
+
+    def _multi_query_got_description(self, body: Buffer):
+        decoded = self._decode_row_description(body)
+        lnq = self._last_named_query if self._last_named_query else None
+        self._last_named_query = None
+        message = PreparedStatementInfo(
+            lnq, ParameterDescription(self._last_parameter_oids), decoded
+        )
+        self._last_parameter_oids = []
+
+        self.state = ProtocolState.MULTI_QUERY_DESCRIBE_SYNC
+
+        return message
+
+    @unrecoverable_error
+    def _handle_during_MULTI_QUERY_RECEIVED_PARSE_COMPLETE(
+        self, code: BackendMessageCode, body: Buffer
+    ):
+        """
+        Decodes a possible ParameterDescription message, or a RowDescription message.
+        """
+        if code == BackendMessageCode.PARAMETER_DESCRIPTION:
+            count = body.read_short()
+            oids = [body.read_int() for o in range(0, count)]
+            self._last_parameter_oids = oids
+            self.state = ProtocolState.MULTI_QUERY_RECEIVED_PARAMETER_DESCRIPTION
+            return ParameterDescription(oids)
+
+        elif code == BackendMessageCode.ROW_DESCRIPTION:
+            return self._multi_query_got_description(body)
+
+        raise ProtocolParseError(f"Expected ParameterDescription or RowDescription, got {code!r}")
+
+    @unrecoverable_error
+    def _handle_during_MULTI_QUERY_RECEIVED_PARAMETER_DESCRIPTION(
+        self, code: BackendMessageCode, body: Buffer
+    ):
+        """
+        Decodes the incoming row description message.
+        """
+        if code == BackendMessageCode.ROW_DESCRIPTION:
+            return self._multi_query_got_description(body)
+
+        raise ProtocolParseError(f"Expected RowDescription, got {code!r}")
+
+    _handle_during_MULTI_QUERY_DESCRIBE_SYNC = _handle_ready_for_query
+
+    ### Multi query, incoming data ###
+    def _handle_during_MULTI_QUERY_SENT_BIND(self, code: BackendMessageCode, body: Buffer):
+        """
+        Waits for the BindComplete message.
+        """
+        if code == BackendMessageCode.BIND_COMPLETE:
+            self.state = ProtocolState.MULTI_QUERY_READING_DATA_ROWS
+            return BindComplete()
+
+        elif code == BackendMessageCode.ERROR_RESPONSE:
+            self.state = ProtocolState.RECOVERABLE_ERROR
+            return self._decode_error_response(body, recoverable=True)
+
+        raise ProtocolParseError(f"Expected BindComplete, got {code!r}")
+
+    @unrecoverable_error
+    def _handle_during_MULTI_QUERY_READING_DATA_ROWS(self, code: BackendMessageCode, body: Buffer):
+        """
+        Reads in data rows, and waits for CommandComplete and ReadyForQuery.
+        """
+        if code == BackendMessageCode.DATA_ROW:
+            return self._decode_data_row(body)
+
+        elif code == BackendMessageCode.COMMAND_COMPLETE:
+            self.state = ProtocolState.MULTI_QUERY_RECEIVED_COMMAND_COMPLETE
+            return self._decode_command_complete(body)
+
+        raise ProtocolParseError(f"Expected DataRow or CommandComplete, got {code!r}")
+
+    _handle_during_MULTI_QUERY_RECEIVED_COMMAND_COMPLETE = _handle_ready_for_query
+
+    _handle_during_RECOVERABLE_ERROR = _handle_ready_for_query
 
     ## Public API ##
     def add_converter(self, converter: Converter):
@@ -665,6 +793,7 @@ class ProtocolMachine(object):
         # these are assertions so that ``python -O`` optimises them out. its a bug to do anything
         # once the protocol is in UNRECOVERABLE_ERROR anyway.
         assert self._state != ProtocolState.UNRECOVERABLE_ERROR, "state is unrecoverable error"
+        assert self._state != ProtocolState.TERMINATED, "state is terminated"
 
         self._logger.debug(f"Protocol: Received {len(data)} bytes")
         self._buffer += data
@@ -675,8 +804,6 @@ class ProtocolMachine(object):
 
         :return: A startup message, that should be sent to PostgreSQL.
         """
-        assert self._state != ProtocolState.UNRECOVERABLE_ERROR, "state is unrecoverable error"
-
         if self._state != ProtocolState.STARTUP:
             raise IllegalStateError("Can't do startup outside of the startup state")
 
@@ -691,6 +818,13 @@ class ProtocolMachine(object):
 
         self.state = ProtocolState.SENT_STARTUP
         return size + packet_body
+
+    def do_terminate(self) -> bytes:
+        """
+        Gets the Terminate message. This closes the protocol!
+        """
+        self.state = ProtocolState.TERMINATED
+        return TERMINATE_MESSAGE
 
     def do_simple_query(self, query_text: str) -> bytes:
         """
@@ -712,6 +846,110 @@ class ProtocolMachine(object):
         Creates a prepared statement. If ``name`` is not specified, this will create the unnamed
         prepared statement.
         """
+        # TIL: You can do Parse, then Describe, then Flush, and get all the messages back at once.
+        # This saves a Flush and a Sync round trip.
+
+        if self._state != ProtocolState.READY_FOR_QUERY:
+            raise IllegalStateError("The server is not ready for queries")
+
+        ## Parse
+        if name is None:
+            packet_body_1 = b"\x00"  # empty string
+            self._last_named_query = None
+        else:
+            packet_body_1 = pack_strings(name, encoding=self._conversion_context.client_encoding)
+            self._last_named_query = name
+
+        packet_body_1 += pack_strings(query_text, encoding=self._conversion_context.client_encoding)
+        # no OIDs. (yet). probably in the future...
+        packet_body_1 += b"\x00\x00"
+
+        header_1 = FrontendMessageCode.PARSE.to_bytes(length=1, byteorder="big")
+        header_1 += (len(packet_body_1) + 4).to_bytes(length=4, byteorder="big")
+        full_packet = header_1 + packet_body_1
+
+        ## Describe
+        packet_body_2 = b"S"
+
+        if name:
+            packet_body_2 += pack_strings(name, encoding="ascii")
+        else:
+            packet_body_2 += b"\x00"
+
+        header_2 = FrontendMessageCode.DESCRIBE.to_bytes(length=1, byteorder="big")
+        header_2 += (len(packet_body_2) + 4).to_bytes(length=4, byteorder="big")
+        full_packet += header_2 + packet_body_2
+        full_packet += FLUSH_MESSAGE
+        full_packet += SYNC_MESSAGE
+
+        self.state = ProtocolState.MULTI_QUERY_SENT_PARSE_DESCRIBE
+        return full_packet
+
+    def do_bind_execute(self, info: PreparedStatementInfo, params: Any):
+        """
+        Binds the specified ``params`` to the prepared statement specified by ``info``,
+        then executes it.
+        """
+        wanted_params = len(info.parameter_oids.oids)
+        if len(params) != wanted_params:
+            raise ValueError(f"Expected exactly {wanted_params} parameters, got {len(params)}")
+
+        ## Bind packet
+        # Portal name: None (we only support the unnamed portal)
+        # AFAICT there's no real use for named portals, unless you want to do another query
+        # inbetween, which we don't support.
+        packet_body_1: bytes = b"\x00"
+
+        # Prepared statement name.
+        if info.name:
+            packet_body_1 += pack_strings(info.name, encoding="ascii")
+        else:
+            packet_body_1 += b"\x00"
+
+        # Parameter count.
+        packet_body_1 += wanted_params.to_bytes(2, byteorder="big")
+        packet_body_1 += b"\x00\x00" * wanted_params  # all text parameters
+
+        # Parameter values.
+        packet_body_1 += wanted_params.to_bytes(2, byteorder="big")
+
+        for oid, typ in zip(info.parameter_oids.oids, params):
+            self._logger.debug(f"Converting {typ} of {oid} ")
+            if typ is None:
+                # nulls are special cased
+                packet_body_1 += (-1).to_bytes(length=4, byteorder="big")
+                continue
+
+            try:
+                converter = self.converters[oid]
+            except KeyError:
+                raise ValueError(f"Missing converter for {oid}, can't convert {typ}")
+
+            converted = converter.to_postgres(self._conversion_context, typ)
+            size = len(converted)
+            packet_body_1 += size.to_bytes(length=4, byteorder="big")
+            packet_body_1 += pack_strings(converted, encoding=self.encoding)
+
+        # No result format codes.
+        packet_body_1 += b"\x00"
+        full_packet = FrontendMessageCode.BIND.to_bytes(length=1, byteorder="big")
+        full_packet += (len(packet_body_1) + 4).to_bytes(length=4, byteorder="big")
+        full_packet += packet_body_1
+
+        ## Execute packet
+        packet_body_2 = b"\x00\x00\x00\x00\x00"  # Unnamed portal, no limit rows
+
+        full_packet += FrontendMessageCode.EXECUTE.to_bytes(length=1, byteorder="big")
+        full_packet += (len(packet_body_2) + 4).to_bytes(length=4, byteorder="big")
+        full_packet += packet_body_2
+
+        ## These messages include a Flush + Sync.
+        full_packet += FLUSH_MESSAGE
+        full_packet += SYNC_MESSAGE
+
+        self.state = ProtocolState.MULTI_QUERY_SENT_BIND
+        self._last_row_description = info.row_description
+        return full_packet
 
     def next_event(self) -> Union[PostgresMessage, object]:
         """
@@ -719,6 +957,12 @@ class ProtocolMachine(object):
 
         :return: Either a :class:`.PostgresMessage`, or the special :data:`NEED_DATA` constant.
         """
+        if (
+            self.state == ProtocolState.UNRECOVERABLE_ERROR
+            or self.state == ProtocolState.TERMINATED
+        ):
+            raise IllegalStateError("The protocol is broken and won't work.")
+
         self._logger.debug(f"Called next_event(), state is {self.state.name}")
 
         if len(self._buffer) == 0:
@@ -809,6 +1053,7 @@ class ProtocolMachine(object):
 
         # Blank states are marked eexplicitly for the sake of ease of reading.
 
+        ## Authentication States ##
         if self.state == ProtocolState.CLEARTEXT_STARTUP:
             self._check_password()
             self._logger.debug("Received cleartext password authentication request.")
@@ -821,11 +1066,10 @@ class ProtocolMachine(object):
             self._check_password()
 
             code = FrontendMessageCode.PASSWORD
-            inner_passsword = md5(self._password.encode("utf-8") + self.username.encode("utf-8"))
+            inner_password = md5(self._password.encode("ascii") + self.username.encode("ascii"))
+            inner_password = inner_password.hexdigest().encode("ascii")
             encoded_password = (
-                md5(inner_passsword.hexdigest().encode("ascii") + self._auth_request.md5_salt)
-                .hexdigest()
-                .encode("ascii")
+                md5(inner_password + self._auth_request.md5_salt).hexdigest().encode("ascii")
             )
             packet_body += b"md5"
             packet_body += encoded_password
@@ -848,26 +1092,11 @@ class ProtocolMachine(object):
 
             self.state = ProtocolState.SASL_FIRST_SENT
 
-        # blank states, nothing to send.
-        elif self.state in (
-            ProtocolState.CLEARTEXT_SENT,
-            ProtocolState.MD5_SENT,
-            ProtocolState.SASL_FIRST_SENT,
-        ):
-            return b""
-
         elif self.state == ProtocolState.SASL_FIRST_RECEIVED:
             code = FrontendMessageCode.PASSWORD
             message = self._scramp_client.get_client_final()
             packet_body += message.encode("ascii")
             self.state = ProtocolState.SASL_FINAL_SENT
-
-        # similar blank state
-        elif self.state == ProtocolState.SASL_FINAL_SENT:
-            return b""
-
-        elif self.state == ProtocolState.AUTHENTICATED_WAITING_FOR_COMPLETION:
-            return b""
 
         else:
             return b""

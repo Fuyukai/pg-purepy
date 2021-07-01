@@ -1,15 +1,34 @@
+"""
+The AnyIO implementation of the PostgreSQL client.
+"""
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from os import PathLike
 from ssl import SSLContext
-from typing import Union, AsyncContextManager, AsyncIterator, List
+from typing import (
+    Union,
+    AsyncContextManager,
+    AsyncIterator,
+    TypeVar,
+    Type,
+)
 
 import anyio
 from anyio import Lock
 from anyio.abc import ByteStream
 from anyio.streams.tls import TLSStream
-from pg_purepy.messages import ErrorResponse, wrap_error, QueryResultMessage, DataRow
+from pg_purepy.dbapi import convert_paramstyle
+from pg_purepy.exc import IllegalStateError
+from pg_purepy.messages import (
+    ErrorResponse,
+    wrap_error,
+    QueryResultMessage,
+    PreparedStatementInfo,
+    BaseDatabaseError,
+    BindComplete,
+)
 from pg_purepy.protocol import (
     ProtocolMachine,
     SSL_MESSAGE,
@@ -18,6 +37,8 @@ from pg_purepy.protocol import (
     NEED_DATA,
     ReadyForQuery,
 )
+
+T = TypeVar("T")
 
 
 class AsyncPostgresConnection(object):
@@ -48,6 +69,13 @@ class AsyncPostgresConnection(object):
         Sends the startup message.
         """
         data = self._protocol.do_startup()
+        await self._stream.send(data)
+
+    async def _terminate(self):
+        """
+        Terminates the protocol. Does not close the connection.
+        """
+        data = self._protocol.do_terminate()
         await self._stream.send(data)
 
     async def _read_until_ready(self):
@@ -86,24 +114,86 @@ class AsyncPostgresConnection(object):
                 err = wrap_error(message)
                 raise err
 
-    async def simple_query(self, query: str) -> AsyncIterator[QueryResultMessage]:
+    async def _wait_for_message(self, typ: Type[T], *, wait_until_ready: bool = True) -> T:
         """
-        Issues a simple query to the server. This does NOT support parameter binding; this should
-        be used for static queries only.
+        Waits until a message of type ``typ`` arrives.
 
-        This is an asynchronous generator; it returns :class:`.QueryResultMessage` instances.
-        This will be one :class:`.RowDescription`, zero or more :class:`.DataRow`, and one
-        :class:`.CommandComplete`,
+        This will wait until the ReadyForQuery message arrives to avoid requiring extra
+        synchronisation, if ``wait_until_ready`` is True. If it never arrives, this will deadlock!
+        """
+        message_found = None
+        async for item in self._read_until_ready():
+            if isinstance(item, typ):
+                if not wait_until_ready:
+                    return item
+
+                message_found = item
+
+            elif isinstance(item, ErrorResponse):
+                raise wrap_error(item)
+
+        if message_found is None:
+            raise IllegalStateError()
+
+        return message_found
+
+    async def create_prepared_statement(self, name: str, query: str) -> PreparedStatementInfo:
+        """
+        Creates a prepared statement. This is part of the low-level query API.
+
+        :param name: The name of the prepared statement.
+        :param query: The query to use.
+        """
+        to_send = self._protocol.do_create_prepared_statement(name=name, query_text=query)
+        await self._stream.send(to_send)
+        pc = await self._wait_for_message(PreparedStatementInfo)
+        return pc
+
+    async def query(
+        self,
+        query: Union[str, PreparedStatementInfo],
+        *params,
+        **kwargs,
+    ) -> AsyncIterator[QueryResultMessage]:
+        """
+        Performs a query to the server. This is an asynchronous generator; you must iterate over
+        values in order to get the messages returned from the server.
+
+        If keyword arguments are provided, an extended query with secure argument parsing will be
+        used. Otherwise, a simple query will be used, which saves bandwidth over the extended query.
+
+        The ``query`` parameter can either be a string or a :class:`~.PreparedStatementInfo`, as
+        returned from :func:`~.create_prepared_statement`. If it is a string, and it has parameters,
+        they must be provided as keyword arguments. If it is a pre-prepared statement, and it has
+        parameters, they must be provided as positional arguments.
+
+        If the server is currently in a failed transaction, then your query will be ignored. Make
+        sure to issue a rollback beforehand, if needed.
         """
         async with self._query_lock:
-            # we always wait until ready, so that if the client picked up an exception
-            # but recovered from it, we don't try and send a query without the ReadyForQuery
-            # message arriving.
+            # always wait until ready! we do not like getting random messages from the last client
+            # intermixed
             if not self._protocol.ready:
                 await self._wait_until_ready()
 
-            data = self._protocol.do_simple_query(query)
-            await self._stream.send(data)
+            simple_query = not (params or kwargs) or isinstance(query, PreparedStatementInfo)
+            if simple_query:
+                data = self._protocol.do_simple_query(query)
+                await self._stream.send(data)
+            else:
+                if not isinstance(query, PreparedStatementInfo):
+                    real_query, params = convert_paramstyle(query, kwargs)
+                    info = await self.create_prepared_statement(name="", query=real_query)
+                else:
+                    info = query
+
+                bound_data = self._protocol.do_bind_execute(info, params)
+                await self._stream.send(bound_data)
+                # we need to get BindComplete because we need to yield the statement's
+                # RowDescription out, for a more "consistent" view.
+                bc = await self._wait_for_message(BindComplete, wait_until_ready=False)
+                # no error, so the query is gonna complete successfully
+                yield info.row_description
 
             async for message in self._read_until_ready():
                 if isinstance(message, ErrorResponse):
@@ -112,13 +202,6 @@ class AsyncPostgresConnection(object):
 
                 if isinstance(message, QueryResultMessage):
                     yield message
-
-    async def simple_query_fetch(self, query: str) -> List[DataRow]:
-        """
-        Like :meth:`~.simple_query`, but returns a list of data rows eagerly loaded rather than
-        lazily loaded.
-        """
-        return [item async for item in self.simple_query(query) if isinstance(item, DataRow)]
 
 
 # noinspection PyProtectedMember
@@ -178,4 +261,12 @@ async def open_database_connection(
 
         await conn._do_startup()
         await conn._wait_until_ready()
-        yield conn
+
+        # this sucks but we send a Terminate in the normal case, a Terminate in the case of a
+        # database error, and a regular close in all other cases.
+        try:
+            yield conn
+            await conn._terminate()
+        except BaseDatabaseError:
+            await conn._terminate()
+            raise

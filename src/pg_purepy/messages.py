@@ -91,7 +91,7 @@ class ReadyForQueryState(enum.Enum):
 @attr.s(slots=True, frozen=True)
 class ReadyForQuery(PostgresMessage):
     """
-    Returned when the server is ready for the next query cycle.
+    Returned when the protocol machine is ready for the next query cycle.
     """
 
     #: The sub-state that the current connection is in.
@@ -193,6 +193,50 @@ class CommandComplete(QueryResultMessage):
     row_count: Optional[int] = attr.ib()
 
 
+@attr.s(slots=True, frozen=True)
+class ParseComplete(PostgresMessage):
+    """
+    Returned when parsing a prepared statement completes.
+    """
+
+    #: The name of the statement prepared. None means the unnamed prepared statement.
+    statement_name: Optional[str] = attr.ib()
+
+
+@attr.s(slots=True, frozen=True)
+class ParameterDescription(PostgresMessage):
+    """
+    Returned when parsing a ParameterDescription message.
+    """
+
+    #: The OIDs within this description.
+    oids: List[int] = attr.ib()
+
+
+@attr.s(slots=True, frozen=True)
+class PreparedStatementInfo(PostgresMessage):
+    """
+    Contains the state of a prepared statement. Returned for a RowDescription over a prepared
+    statement.
+    """
+
+    #: The name of the prepared statement.
+    name: Optional[str] = attr.ib()
+
+    #: The :class:`~.ParameterDescription` for the parameters for this prepared statement.
+    parameter_oids: ParameterDescription = attr.ib()
+
+    #: The description of the incoming parameters of the prepared statement.
+    row_description: RowDescription = attr.ib()
+
+
+@attr.s(slots=True, frozen=True)
+class BindComplete(PostgresMessage):
+    """
+    Returned when a Bind message completes successfully.
+    """
+
+
 def _optional_int(value: Optional[str]) -> Optional[int]:
     if value is None:
         return None
@@ -205,6 +249,9 @@ class ErrorResponse(PostgresMessage):
     """
     Returned when an error is encountered by the server.
     """
+
+    #: If this error is recoverable or not.
+    recoverable: bool = attr.ib()
 
     severity_localised: str = attr.ib()
     severity: str = attr.ib()
@@ -224,9 +271,10 @@ class ErrorResponse(PostgresMessage):
     constraint_name: Optional[str] = attr.ib(default=None)
 
 
-class DatabaseError(PostgresqlError):
+class BaseDatabaseError(PostgresqlError):
     """
-    An exception produceed from the database, usually from an ErrorResponse message.
+    An exception produceed from the database, usually from an ErrorResponse message. This does
+    NOT include things such as protocol parsing errors.
     """
 
     def __init__(self, response: ErrorResponse, query: str = None):
@@ -245,13 +293,27 @@ class DatabaseError(PostgresqlError):
         return buf.getvalue()
 
 
-class InvalidPasswordError(DatabaseError):
+class RecoverableDatabaseError(BaseDatabaseError):
+    """
+    A subclass of :class:`.BaseDatabaseError` that the client may potentially recover from. Examples
+    include query errors.
+    """
+
+
+class UnrecoverableDatabaseError(BaseDatabaseError):
+    """
+    A subclass of :class:`.BaseDatabaseError` that the client must not recover from. This usually
+    implies internal errors in the server.
+    """
+
+
+class InvalidPasswordError(UnrecoverableDatabaseError):
     """
     Raised when the password provided is invalid.
     """
 
 
-def wrap_error(response: ErrorResponse, query: str = None) -> DatabaseError:
+def wrap_error(response: ErrorResponse, query: str = None) -> BaseDatabaseError:
     """
     Wraps a :class:`.ErrorResponse` in an exception. If a query produced the error in question, then
     passing it as the ``query`` param can produce a prettier error.
@@ -261,4 +323,7 @@ def wrap_error(response: ErrorResponse, query: str = None) -> DatabaseError:
         return InvalidPasswordError(response, query)
 
     else:
-        return DatabaseError(response, query)
+        if response.recoverable:
+            return RecoverableDatabaseError(response, query)
+        else:
+            return UnrecoverableDatabaseError(response, query)

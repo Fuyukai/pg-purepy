@@ -2,7 +2,7 @@ from collections import deque
 from typing import List
 
 
-def pack_strings(*s: str, encoding: str = "utf-8") -> bytes:
+def pack_strings(*s: str, encoding: str = "ascii") -> bytes:
     """
     Packs a sequence of strings using null terminators.
     """
@@ -11,7 +11,7 @@ def pack_strings(*s: str, encoding: str = "utf-8") -> bytes:
 
 def unpack_strings(
     b: bytes,
-    encoding: str = "utf-8",
+    encoding: str = "ascii",
     include_trailing: bool = False,
 ) -> List[str]:
     """

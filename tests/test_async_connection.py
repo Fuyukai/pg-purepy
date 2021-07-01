@@ -9,7 +9,7 @@ from pg_purepy import (
     RowDescription,
     DataRow,
     CommandComplete,
-    DatabaseError,
+    RecoverableDatabaseError,
 )
 from pg_purepy.connection import open_database_connection, AsyncPostgresConnection
 
@@ -46,19 +46,6 @@ async def test_needs_password():
         ) as conn:
             pass
 
-            async with conn.execute_bound(
-                "select * from whatever where row = $0;", "something"
-            ) as query:
-                async for row in query:
-                    ...
-
-            async with conn.named_query("select * from whatever where row = $0;") as query:
-                binder = query.binder()
-                binder.bind(0, "something")
-                async with binder.execute() as result:
-                    async for row in result:
-                        ...
-
 
 async def test_basic_select():
     """
@@ -66,7 +53,7 @@ async def test_basic_select():
     """
     async with open_connection() as conn:
         # fun fact: select null; returns text.
-        result = [i async for i in conn.simple_query("select null;")]
+        result = [i async for i in conn.query("select null;")]
         assert len(result) == 3
         desc, row, count = result
 
@@ -87,13 +74,13 @@ async def test_query_after_error():
     Tests running a second query after a first query raises an error.
     """
     async with open_connection() as conn:
-        with pytest.raises(DatabaseError) as e:
-            async for _ in conn.simple_query("select * from nonexistent;"):
+        with pytest.raises(RecoverableDatabaseError) as e:
+            async for _ in conn.query("select * from nonexistent;"):
                 pass
 
         assert e.value.response.code == "42P01"
 
-        result = [i async for i in conn.simple_query("select 1;")]
+        result = [i async for i in conn.query("select 1;")]
         row = result[1]
         assert isinstance(row, DataRow)
         assert len(row.data) == 1
@@ -105,7 +92,7 @@ async def test_multiple_queries_one_message():
     Tests running multiple queries in one message.
     """
     async with open_connection() as conn:
-        result = [i async for i in conn.simple_query("select 1; select 2;")]
+        result = [i async for i in conn.query("select 1; select 2;")]
 
         assert len(result) == 6
         row1, row2 = result[1], result[4]
@@ -114,3 +101,15 @@ async def test_multiple_queries_one_message():
         assert isinstance(row2, DataRow)
         assert row1.data[0] == 1
         assert row2.data[0] == 2
+
+
+async def test_query_with_params():
+    """
+    Tests running a query with parameters.
+    """
+    async with open_connection() as conn:
+        result = [i async for i in conn.query("select 1 where 'a' = :x;", x="a")]
+        assert len(result) == 3
+        row = result[1]
+        assert isinstance(row, DataRow)
+        assert row.data[0] == 1

@@ -90,7 +90,7 @@ class TextConverter(Converter):
 
 
 _PASSTHROUGH = lambda it: it
-DEFAULT_TEXT_CONVERTER = SimpleFunctionConverter(-1, _PASSTHROUGH)
+DEFAULT_TEXT_CONVERTER = SimpleFunctionConverter(-1, _PASSTHROUGH, _PASSTHROUGH)
 
 #: A list of the default type converters.
 DEFAULT_CONVERTERS: List[Converter] = [
