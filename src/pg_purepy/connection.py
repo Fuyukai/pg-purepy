@@ -38,6 +38,11 @@ from pg_purepy.protocol import (
     ReadyForQuery,
 )
 
+try:
+    from contextlib import aclosing
+except ImportError:
+    from async_generator import aclosing
+
 T = TypeVar("T")
 
 
@@ -109,10 +114,11 @@ class AsyncPostgresConnection(object):
         Waits until the conneection is ready. This discards all events. Useful in the authentication
         loop.
         """
-        async for message in self._read_until_ready():
-            if isinstance(message, ErrorResponse):
-                err = wrap_error(message)
-                raise err
+        async with aclosing(self._read_until_ready()) as gen:
+            async for message in gen:
+                if isinstance(message, ErrorResponse):
+                    err = wrap_error(message)
+                    raise err
 
     async def _wait_for_message(self, typ: Type[T], *, wait_until_ready: bool = True) -> T:
         """
@@ -122,20 +128,21 @@ class AsyncPostgresConnection(object):
         synchronisation, if ``wait_until_ready`` is True. If it never arrives, this will deadlock!
         """
         message_found = None
-        async for item in self._read_until_ready():
-            if isinstance(item, typ):
-                if not wait_until_ready:
-                    return item
+        async with aclosing(self._read_until_ready()) as gen:
+            async for item in gen:
+                if isinstance(item, typ):
+                    if not wait_until_ready:
+                        return item
 
-                message_found = item
+                    message_found = item
 
-            elif isinstance(item, ErrorResponse):
-                raise wrap_error(item)
+                elif isinstance(item, ErrorResponse):
+                    raise wrap_error(item)
 
-        if message_found is None:
-            raise IllegalStateError()
+            if message_found is None:
+                raise IllegalStateError(f"No message of type {typ} was yielded")
 
-        return message_found
+            return message_found
 
     async def create_prepared_statement(self, name: str, query: str) -> PreparedStatementInfo:
         """
@@ -195,13 +202,14 @@ class AsyncPostgresConnection(object):
                 # no error, so the query is gonna complete successfully
                 yield info.row_description
 
-            async for message in self._read_until_ready():
-                if isinstance(message, ErrorResponse):
-                    err = wrap_error(message)
-                    raise err
+            async with aclosing(self._read_until_ready()) as agen:
+                async for message in agen:
+                    if isinstance(message, ErrorResponse):
+                        err = wrap_error(message)
+                        raise err
 
-                if isinstance(message, QueryResultMessage):
-                    yield message
+                    if isinstance(message, QueryResultMessage):
+                        yield message
 
 
 # noinspection PyProtectedMember
