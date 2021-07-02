@@ -279,6 +279,9 @@ class ProtocolMachine(object):
         #: Mapping of miscellaneous connection parameters.
         self.connection_params = {}
 
+        #: If this connection is authenticated or not.
+        self.is_authenticated = False
+
         #: The converter classes used to convert between PostgreSQL and Python types.
         self.converters: Dict[int, Converter] = {i.oid: i for i in DEFAULT_CONVERTERS}
 
@@ -311,8 +314,6 @@ class ProtocolMachine(object):
         self._state: ProtocolState = ProtocolState.STARTUP
 
         ## authentication
-        # private because ``is_authenticated()`` consumes buffer data
-        self._is_authenticated = False
         # current authentication request. used by various auth functions
         self._auth_request: Optional[AuthenticationRequest] = None
         # scramp client, used for SASL
@@ -510,7 +511,7 @@ class ProtocolMachine(object):
 
             # AuthenticationOk. We skip authentication entirely.
             if decoded == 0:
-                self._is_authenticated = True
+                self.is_authenticated = True
                 self.state = ProtocolState.AUTHENTICATED_WAITING_FOR_COMPLETION
                 return AuthenticationCompleted()
 
@@ -558,7 +559,7 @@ class ProtocolMachine(object):
         if code == BackendMessageCode.AUTHENTICATION_REQUEST:
             body_code = body.read_int()
             if body_code == 0:  # AuthenticationOk
-                self._is_authenticated = True
+                self.is_authenticated = True
                 self.state = ProtocolState.AUTHENTICATED_WAITING_FOR_COMPLETION
                 return AuthenticationCompleted()
             else:
@@ -1128,23 +1129,6 @@ class ProtocolMachine(object):
 
         msg_len = (len(packet_body) + 4).to_bytes(length=4, byteorder="big", signed=False)
         return code.to_bytes(length=1, byteorder="big") + msg_len + packet_body
-
-    def is_authenticated(self) -> bool:
-        """
-        Checks if this connection is authenticated. This will perform internal work during the
-        authentication loop, but only return normally outside of the authentication loop.
-        """
-        if self._is_authenticated:
-            return True
-
-        # this method actually pumps events
-        evt = self.next_event()
-        if evt is NEED_DATA:
-            return False
-
-        if isinstance(evt, AuthenticationCompleted):
-            self._is_authenticated = True
-            return True
 
 
 # TLS helpers
