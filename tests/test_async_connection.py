@@ -1,7 +1,4 @@
 import logging
-import os
-from contextlib import asynccontextmanager
-from typing import AsyncContextManager
 
 import pytest
 from pg_purepy import (
@@ -12,7 +9,7 @@ from pg_purepy import (
     CommandComplete,
     RecoverableDatabaseError,
 )
-from pg_purepy.connection import open_database_connection, AsyncPostgresConnection
+from pg_purepy.connection import open_database_connection
 
 from tests.util import open_connection, POSTGRES_ADDRESS, POSTGRES_USERNAME
 
@@ -154,3 +151,94 @@ async def test_transaction_helper_error():
         )
 
         assert result[0].data[0] == 0
+
+
+async def test_execute_prepared_statement_insert():
+    """
+    Tests executing a prepared statement with parameters.
+    """
+    async with open_connection() as conn:
+        await conn.execute(
+            "create temp table test_epsi (id serial primary key, foo text not null);"
+        )
+
+        st_no_params = await conn.create_prepared_statement(
+            name="test_epsp_1",
+            query="insert into test_epsi(foo) values ('one');"
+        )
+        rows_no_params = await conn.execute(st_no_params)
+        assert rows_no_params == 1
+
+        st_with_params = await conn.create_prepared_statement(
+            name="test_epsp_2",
+            query="insert into test_epsi(foo) values ($1);"
+        )
+        rows_params = await conn.execute(st_with_params, "two")
+        assert rows_params == 1
+
+        count = await conn.fetch("select count(*) from test_epsi;")
+        assert len(count) == 1
+        assert count[0].data[0] == 2
+
+        rows = await conn.fetch("select * from test_epsi;")
+        assert len(rows) == 2
+        assert rows[0].data[1] == "one"
+        assert rows[1].data[1] == "two"
+
+
+## Specific subcommands ##
+async def test_insert():
+    """
+    Tests inserting data into a table.
+    """
+    async with open_connection() as conn:
+        await conn.execute(
+            "create temp table test_insert (id serial primary key, foo text not null);"
+        )
+        row_count = await conn.execute("insert into test_insert(foo) values (:one);", one="test")
+        assert row_count == 1
+        result = await conn.fetch("select * from test_insert;")
+        assert len(result) == 1
+        assert result[0].data == [1, "test"]
+
+
+async def test_update():
+    """
+    Tests updating data in a table.
+    """
+    async with open_connection() as conn:
+        await conn.execute(
+            "create temp table test_update (id serial primary key, foo text not null);"
+        )
+        await conn.execute("insert into test_update(foo) values (:one);", one="test")
+        pre_update = await conn.fetch("select * from test_update;")
+        assert len(pre_update) == 1
+        assert pre_update[0].data == [1, "test"]
+
+        row_count = await conn.execute("update test_update set foo = :one;", one="test_2")
+        assert row_count == 1
+        post_update = await conn.fetch("select * from test_update;")
+        assert len(post_update) == 1
+        assert post_update[0].data == [1, "test_2"]
+
+
+async def test_delete():
+    """
+    Tests deleting data in a table.
+    :return:
+    """
+    async with open_connection() as conn:
+        await conn.execute(
+            "create temp table test_delete (id serial primary key, foo text not null);"
+        )
+        await conn.execute("insert into test_delete(foo) values (:one);", one="test")
+        pre_delete = await conn.fetch("select * from test_delete;")
+        assert len(pre_delete) == 1
+        assert pre_delete[0].data == [1, "test"]
+
+        row_count = await conn.execute("delete from test_delete;")
+        assert row_count == 1
+
+        post_delete = await conn.fetch("select * from test_delete;")
+        assert len(post_delete) == 0
+

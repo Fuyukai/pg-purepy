@@ -226,8 +226,9 @@ class PreparedStatementInfo(PostgresMessage):
     #: The :class:`~.ParameterDescription` for the parameters for this prepared statement.
     parameter_oids: ParameterDescription = attr.ib()
 
-    #: The description of the incoming parameters of the prepared statement.
-    row_description: RowDescription = attr.ib()
+    #: The description of the incoming row data of the prepared statement.
+    #: This may be None if this query doesn't return any data.
+    row_description: Optional[RowDescription] = attr.ib()
 
 
 @attr.s(slots=True, frozen=True)

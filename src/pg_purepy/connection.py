@@ -184,7 +184,7 @@ class AsyncPostgresConnection(object):
             if not self._protocol.ready:
                 await self.wait_until_ready()
 
-            simple_query = not (params or kwargs) or isinstance(query, PreparedStatementInfo)
+            simple_query = not ((params or kwargs) or isinstance(query, PreparedStatementInfo))
             if simple_query:
                 data = self._protocol.do_simple_query(query)
                 await self._stream.send(data)
@@ -305,7 +305,12 @@ class QueryResult:
             if isinstance(next_message, DataRow):
                 return next_message
             elif isinstance(next_message, CommandComplete):
-                self._row_count = next_message.row_count
+                # some messages don't have a row count, e.g. CREATE
+                if next_message.row_count is None:
+                    self._row_count = 0
+                else:
+                    self._row_count = next_message.row_count
+
                 raise StopAsyncIteration
 
     async def row_count(self):

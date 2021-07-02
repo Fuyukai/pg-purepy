@@ -565,8 +565,8 @@ class ProtocolMachine(object):
                 raise ProtocolParseError(
                     f"Unexpected response: Expected AuthenticationOk, but got {body_code}"
                 )
-        else:
-            raise ProtocolParseError(f"Unknown message code {code} for state {self.state}")
+
+        raise UnknownMessageError(f"Unknown message code {code} for state {self.state}")
 
     _handle_during_CLEARTEXT_SENT = _generic_auth_handle
     _handle_during_MD5_SENT = _generic_auth_handle
@@ -592,7 +592,7 @@ class ProtocolMachine(object):
         if code == BackendMessageCode.READY_FOR_QUERY:
             return self._got_ready_for_query(body)
 
-        raise ProtocolParseError(f"Expected ReadyForQuery, got {code!r}")
+        raise UnknownMessageError(f"Expected ReadyForQuery, got {code!r}")
 
     @unrecoverable_error
     def _handle_during_AUTHENTICATED_WAITING_FOR_COMPLETION(
@@ -611,8 +611,7 @@ class ProtocolMachine(object):
             key = body.read_int()
             return BackendKeyData(pid, key)
 
-        else:
-            raise ProtocolParseError(f"Expected ReadyForQuery, got {code!r}")
+        raise UnknownMessageError(f"Expected ReadyForQuery, got {code!r}")
 
     ### Simple Query ###
     def _got_row_description(self, body: Buffer):
@@ -646,7 +645,7 @@ class ProtocolMachine(object):
             self._logger.warning(f"Error during query: {error.severity}: {error.message}")
             return error
 
-        raise ProtocolParseError(f"Expected RowDescription, got {code!r}")
+        raise UnknownMessageError(f"Expected RowDescription, got {code!r}")
 
     @unrecoverable_error
     def _handle_during_SIMPLE_QUERY_RECEIVED_ROW_DESCRIPTION(
@@ -663,8 +662,7 @@ class ProtocolMachine(object):
             self._last_row_description = None
             return self._decode_command_complete(body)
 
-        else:
-            raise ProtocolParseError(f"Expected DataRow or CommandComplete, got {code!r}")
+        raise UnknownMessageError(f"Expected DataRow or CommandComplete, got {code!r}")
 
     @unrecoverable_error
     def _handle_during_SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE(
@@ -680,7 +678,7 @@ class ProtocolMachine(object):
         elif code == BackendMessageCode.READY_FOR_QUERY:
             return self._got_ready_for_query(body)
 
-        raise ProtocolParseError(f"Unexpected message {code!r}")
+        raise UnknownMessageError(f"Unexpected message {code!r}")
 
     _handle_during_SIMPLE_QUERY_ERRORED = _handle_ready_for_query
 
@@ -693,15 +691,14 @@ class ProtocolMachine(object):
         """
         if code == BackendMessageCode.PARSE_COMPLETE:
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_PARSE_COMPLETE
-            lnq, self._last_named_query = self._last_named_query, None
-            return ParseComplete(lnq)
+            return ParseComplete(self._last_named_query)
 
         elif code == BackendMessageCode.ERROR_RESPONSE:
             # bad query
             self.state = ProtocolState.RECOVERABLE_ERROR
             return self._decode_error_response(body, recoverable=True)
 
-        raise ProtocolParseError(f"Expected ParseComplete, got {code!r}")
+        raise UnknownMessageError(f"Expected ParseComplete, got {code!r}")
 
     def _multi_query_got_description(self, body: Buffer):
         decoded = self._decode_row_description(body)
@@ -714,6 +711,14 @@ class ProtocolMachine(object):
 
         self.state = ProtocolState.MULTI_QUERY_DESCRIBE_SYNC
 
+        return message
+
+    def _multi_query_got_no_data(self, body: Buffer):
+        lnq = self._last_named_query if self._last_named_query else None
+        self._last_named_query = None
+        message = PreparedStatementInfo(lnq, ParameterDescription(self._last_parameter_oids), None)
+
+        self.state = ProtocolState.MULTI_QUERY_DESCRIBE_SYNC
         return message
 
     @unrecoverable_error
@@ -733,7 +738,7 @@ class ProtocolMachine(object):
         elif code == BackendMessageCode.ROW_DESCRIPTION:
             return self._multi_query_got_description(body)
 
-        raise ProtocolParseError(f"Expected ParameterDescription or RowDescription, got {code!r}")
+        raise UnknownMessageError(f"Expected ParameterDescription or RowDescription, got {code!r}")
 
     @unrecoverable_error
     def _handle_during_MULTI_QUERY_RECEIVED_PARAMETER_DESCRIPTION(
@@ -742,10 +747,15 @@ class ProtocolMachine(object):
         """
         Decodes the incoming row description message.
         """
+        # Both of these change state to MULTI_QUERY_DESCRIBE_SYNC
         if code == BackendMessageCode.ROW_DESCRIPTION:
+            # Changes state to MULTI_QUERY_DESCRIBE_SYNC
             return self._multi_query_got_description(body)
 
-        raise ProtocolParseError(f"Expected RowDescription, got {code!r}")
+        elif code == BackendMessageCode.NO_DATA:
+            return self._multi_query_got_no_data(body)
+
+        raise UnknownMessageError(f"Expected RowDescription or NoData, got {code!r}")
 
     _handle_during_MULTI_QUERY_DESCRIBE_SYNC = _handle_ready_for_query
 
@@ -762,7 +772,7 @@ class ProtocolMachine(object):
             self.state = ProtocolState.RECOVERABLE_ERROR
             return self._decode_error_response(body, recoverable=True)
 
-        raise ProtocolParseError(f"Expected BindComplete, got {code!r}")
+        raise UnknownMessageError(f"Expected BindComplete, got {code!r}")
 
     @unrecoverable_error
     def _handle_during_MULTI_QUERY_READING_DATA_ROWS(self, code: BackendMessageCode, body: Buffer):
@@ -776,7 +786,7 @@ class ProtocolMachine(object):
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_COMMAND_COMPLETE
             return self._decode_command_complete(body)
 
-        raise ProtocolParseError(f"Expected DataRow or CommandComplete, got {code!r}")
+        raise UnknownMessageError(f"Expected DataRow or CommandComplete, got {code!r}")
 
     _handle_during_MULTI_QUERY_RECEIVED_COMMAND_COMPLETE = _handle_ready_for_query
 
@@ -900,44 +910,53 @@ class ProtocolMachine(object):
         if len(params) != wanted_params:
             raise ValueError(f"Expected exactly {wanted_params} parameters, got {len(params)}")
 
-        ## Bind packet
-        # Portal name: None (we only support the unnamed portal)
-        # AFAICT there's no real use for named portals, unless you want to do another query
-        # inbetween, which we don't support.
-        packet_body_1: bytes = b"\x00"
+        ## Packet: Bind
 
-        # Prepared statement name.
-        if info.name:
-            packet_body_1 += pack_strings(info.name, encoding="ascii")
-        else:
+        ### Bind: Portal Name
+        # Unsupported. Empty.
+        packet_body_1: bytes = pack_strings("")
+
+        ### Bind: Source Prepared Statement
+        if info.name is None:
             packet_body_1 += b"\x00"
+        else:
+            packet_body_1 += pack_strings(info.name, encoding="ascii")
 
-        # Parameter count.
-        packet_body_1 += wanted_params.to_bytes(2, byteorder="big")
-        packet_body_1 += b"\x00\x00" * wanted_params  # all text parameters
+        ### Bind: Number of parameter format codes.
+        packet_body_1 += struct.pack(">h", wanted_params)
+        ### Bind: Parameter format codes.
+        for _ in range(0, wanted_params):
+            packet_body_1 += struct.pack(">h", 0)
 
-        # Parameter values.
-        packet_body_1 += wanted_params.to_bytes(2, byteorder="big")
-
-        for oid, typ in zip(info.parameter_oids.oids, params):
-            self._logger.debug(f"Converting {typ} of {oid} ")
-            if typ is None:
-                # nulls are special cased
-                packet_body_1 += (-1).to_bytes(length=4, byteorder="big")
+        ### Bind: Number of parameter values.
+        packet_body_1 += struct.pack(">h", wanted_params)
+        ### Bind: Parameter values.
+        for oid, obb in zip(info.parameter_oids.oids, params):
+            if obb is None:
+                # Nulls are special cased with a -1 length.
+                packet_body_1 += struct.pack(">i", -1)
                 continue
 
             try:
                 converter = self.converters[oid]
             except KeyError:
-                raise ValueError(f"Missing converter for {oid}, can't convert {typ}")
+                raise ValueError(f"Missing converter for {oid}, can't convert {obb}") from None
 
-            converted = converter.to_postgres(self._conversion_context, typ)
-            size = len(converted)
-            packet_body_1 += size.to_bytes(length=4, byteorder="big")
-            packet_body_1 += pack_strings(converted, encoding=self.encoding)
+            converted = converter.to_postgres(self._conversion_context, obb)
+            encoded = converted.encode(self.encoding)
+            packet_body_1 += struct.pack(">i", len(encoded))
+            packet_body_1 += encoded
 
-        # No result format codes.
-        packet_body_1 += b"\x00"
+        ### Bind: Result columns formats.
+        if info.row_description:  # NoData results set the row_description to empty.
+            wanted_results = len(info.row_description.columns)
+        else:
+            wanted_results = 0
+
+        packet_body_1 += struct.pack(">h", wanted_results)
+        for _ in range(0, wanted_results):
+            packet_body_1 += struct.pack(">h", 0)
+
         full_packet = FrontendMessageCode.BIND.to_bytes(length=1, byteorder="big")
         full_packet += (len(packet_body_1) + 4).to_bytes(length=4, byteorder="big")
         full_packet += packet_body_1
