@@ -629,7 +629,14 @@ class ProtocolMachine(object):
         """
         Handles incoming messages once we've sent a query exection message.
         """
-        if code == BackendMessageCode.ROW_DESCRIPTION:
+        if code == BackendMessageCode.COMMAND_COMPLETE:
+            # commands such as Begin or Rollback don't return rows, thus don't return a
+            # RowDescription.
+            self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE
+            self._logger.debug("Query returned no rows")
+            return self._decode_command_complete(body)
+
+        elif code == BackendMessageCode.ROW_DESCRIPTION:
             return self._got_row_description(body)
 
         elif code == BackendMessageCode.ERROR_RESPONSE:
@@ -639,8 +646,7 @@ class ProtocolMachine(object):
             self._logger.warning(f"Error during query: {error.severity}: {error.message}")
             return error
 
-        else:
-            raise ProtocolParseError(f"Expected RowDescription, got {code!r}")
+        raise ProtocolParseError(f"Expected RowDescription, got {code!r}")
 
     @unrecoverable_error
     def _handle_during_SIMPLE_QUERY_RECEIVED_ROW_DESCRIPTION(

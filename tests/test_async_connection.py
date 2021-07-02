@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncContextManager
@@ -53,7 +54,7 @@ async def test_basic_select():
     """
     async with open_connection() as conn:
         # fun fact: select null; returns text.
-        result = [i async for i in conn.query("select null;")]
+        result = [i async for i in conn.lowlevel_query("select null;")]
         assert len(result) == 3
         desc, row, count = result
 
@@ -75,32 +76,17 @@ async def test_query_after_error():
     """
     async with open_connection() as conn:
         with pytest.raises(RecoverableDatabaseError) as e:
-            async for _ in conn.query("select * from nonexistent;"):
-                pass
+            _ = await conn.fetch("select * from nonexistent;")
 
         assert e.value.response.code == "42P01"
 
-        result = [i async for i in conn.query("select 1;")]
-        row = result[1]
+        result = await conn.fetch("select 1;")
+        assert len(result) == 1
+
+        row = result[0]
         assert isinstance(row, DataRow)
         assert len(row.data) == 1
         assert row.data[0] == 1
-
-
-async def test_multiple_queries_one_message():
-    """
-    Tests running multiple queries in one message.
-    """
-    async with open_connection() as conn:
-        result = [i async for i in conn.query("select 1; select 2;")]
-
-        assert len(result) == 6
-        row1, row2 = result[1], result[4]
-
-        assert isinstance(row1, DataRow)
-        assert isinstance(row2, DataRow)
-        assert row1.data[0] == 1
-        assert row2.data[0] == 2
 
 
 async def test_query_with_params():
@@ -108,8 +94,63 @@ async def test_query_with_params():
     Tests running a query with parameters.
     """
     async with open_connection() as conn:
-        result = [i async for i in conn.query("select 1 where 'a' = :x;", x="a")]
-        assert len(result) == 3
-        row = result[1]
+        result = await conn.fetch("select 1 where 'a' = :x;", x="a")
+
+        assert len(result) == 1
+        row = result[0]
         assert isinstance(row, DataRow)
         assert row.data[0] == 1
+
+
+async def test_transaction_status_manual():
+    """
+    Tests getting the transaction status during a query.
+    """
+
+    async with open_connection() as conn:
+        await conn.execute("begin;")
+        assert conn.in_transaction
+        await conn.execute("rollback;")
+        assert not conn.in_transaction
+
+
+async def test_transaction_helper_normal():
+    """
+    Tests the transaction helper in a normal situation.
+    """
+    async with open_connection() as conn:
+        async with conn.with_transaction():
+            assert conn.in_transaction
+            await conn.execute(
+                "create temp table test_transaction_helper_normal (id int primary key);"
+            )
+
+        assert not conn.in_transaction
+        result = await conn.fetch(
+            "select count(*) from pg_tables where tablename = :name;",
+            name="test_transaction_helper_normal",
+        )
+
+        assert result[0].data[0] == 1
+
+
+async def test_transaction_helper_error():
+    """
+    Tests the transaction helper in an error situation.
+    """
+    async with open_connection() as conn:
+        with pytest.raises(ValueError):
+            async with conn.with_transaction():
+                assert conn.in_transaction
+                await conn.execute(
+                    "create temp table test_transaction_helper_error (id int primary key);"
+                )
+                raise ValueError()
+
+        assert not conn.in_transaction
+        result = await conn.fetch(
+            "select count(*) from pg_tables where tablename = :name;",
+            name="test_transaction_helper_normal",
+        )
+
+        assert result[0].data[0] == 0

@@ -13,6 +13,7 @@ from typing import (
     AsyncIterator,
     TypeVar,
     Type,
+    List,
 )
 
 import anyio
@@ -28,6 +29,9 @@ from pg_purepy.messages import (
     PreparedStatementInfo,
     BaseDatabaseError,
     BindComplete,
+    PostgresMessage,
+    DataRow,
+    CommandComplete,
 )
 from pg_purepy.protocol import (
     ProtocolMachine,
@@ -69,6 +73,13 @@ class AsyncPostgresConnection(object):
         """
         return self._protocol.ready
 
+    @property
+    def in_transaction(self) -> bool:
+        """
+        Returns if this connection is currently in a transaction.
+        """
+        return self._protocol.in_transaction
+
     async def _do_startup(self):
         """
         Sends the startup message.
@@ -109,7 +120,7 @@ class AsyncPostgresConnection(object):
             received = await self._stream.receive(65536)
             self._protocol.receive_bytes(received)
 
-    async def _wait_until_ready(self):
+    async def wait_until_ready(self):
         """
         Waits until the conneection is ready. This discards all events. Useful in the authentication
         loop.
@@ -144,6 +155,7 @@ class AsyncPostgresConnection(object):
 
             return message_found
 
+    ## Low-level API ##
     async def create_prepared_statement(self, name: str, query: str) -> PreparedStatementInfo:
         """
         Creates a prepared statement. This is part of the low-level query API.
@@ -156,7 +168,7 @@ class AsyncPostgresConnection(object):
         pc = await self._wait_for_message(PreparedStatementInfo)
         return pc
 
-    async def query(
+    async def lowlevel_query(
         self,
         query: Union[str, PreparedStatementInfo],
         *params,
@@ -165,23 +177,12 @@ class AsyncPostgresConnection(object):
         """
         Performs a query to the server. This is an asynchronous generator; you must iterate over
         values in order to get the messages returned from the server.
-
-        If keyword arguments are provided, an extended query with secure argument parsing will be
-        used. Otherwise, a simple query will be used, which saves bandwidth over the extended query.
-
-        The ``query`` parameter can either be a string or a :class:`~.PreparedStatementInfo`, as
-        returned from :func:`~.create_prepared_statement`. If it is a string, and it has parameters,
-        they must be provided as keyword arguments. If it is a pre-prepared statement, and it has
-        parameters, they must be provided as positional arguments.
-
-        If the server is currently in a failed transaction, then your query will be ignored. Make
-        sure to issue a rollback beforehand, if needed.
         """
         async with self._query_lock:
             # always wait until ready! we do not like getting random messages from the last client
             # intermixed
             if not self._protocol.ready:
-                await self._wait_until_ready()
+                await self.wait_until_ready()
 
             simple_query = not (params or kwargs) or isinstance(query, PreparedStatementInfo)
             if simple_query:
@@ -198,7 +199,7 @@ class AsyncPostgresConnection(object):
                 await self._stream.send(bound_data)
                 # we need to get BindComplete because we need to yield the statement's
                 # RowDescription out, for a more "consistent" view.
-                bc = await self._wait_for_message(BindComplete, wait_until_ready=False)
+                await self._wait_for_message(BindComplete, wait_until_ready=False)
                 # no error, so the query is gonna complete successfully
                 yield info.row_description
 
@@ -210,6 +211,115 @@ class AsyncPostgresConnection(object):
 
                     if isinstance(message, QueryResultMessage):
                         yield message
+
+    ## Mid-level API. ##
+    @asynccontextmanager
+    async def query(
+        self,
+        query: Union[str, PreparedStatementInfo],
+        *params,
+        **kwargs,
+    ) -> AsyncContextManager[QueryResult]:
+        """
+        Mid-level query API.
+
+        The ``query`` parameter can either be a string or a :class:`~.PreparedStatementInfo`, as
+        returned from :func:`~.create_prepared_statement`. If it is a string, and it has parameters,
+        they must be provided as keyword arguments. If it is a pre-prepared statement, and it has
+        parameters, they must be provided as positional arguments.
+
+        If keyword arguments are provided or a prepared statement is passed, an extended query with
+        secure argument parsing will be used. Otherwise, a simple query will be used, which saves
+        bandwidth over the extended query protocol.
+
+        If the server is currently in a failed transaction, then your query will be ignored. Make
+        sure to issue a rollback beforehand, if needed.
+
+        This is an asynchronous context manager that yields a :class:`.QueryResult`, that can
+        be asynchronously iterated over for the data rows of the query. Once all data rows have
+        been iterated over, you can call :func:`.QueryResult.row_count` to get the total row count.
+        """
+        async with aclosing(self.lowlevel_query(query, *params, **kwargs)) as agen:
+            yield QueryResult(agen.__aiter__())
+            # always wait
+            await self.wait_until_ready()
+
+    @asynccontextmanager
+    async def with_transaction(self) -> None:
+        """
+        Asynchronous context manager that automatically opens and closes a transaction.
+        """
+        try:
+            await self.execute("begin;")
+            yield
+        except Exception:
+            await self.execute("rollback;")
+            raise
+        else:
+            await self.execute("commit;")
+
+    ### DBAPI style methods ###
+    async def fetch(
+        self, query: Union[str, PreparedStatementInfo], *params, **kwargs
+    ) -> List[DataRow]:
+        """
+        Eagerly fetches the result of a query. This returns a list of :class:`~.DataRow` objects.
+
+        If you wish to lazily load the results of a query, use
+        :meth:`~.AsyncPostgresConnection.query` instead.
+        """
+        async with self.query(query, *params, **kwargs) as q:
+            return [i async for i in q]
+
+    async def execute(self, query: Union[str, PreparedStatementInfo], *params, **kwargs) -> int:
+        """
+        Executes a query, returning its row count. This will discard all data rows.
+        """
+        async with self.query(query, *params, **kwargs) as q:
+            return await q.row_count()
+
+
+class QueryResult:
+    """
+    Wraps the execution of a query.
+    """
+
+    def __init__(self, iterator: AsyncIterator[PostgresMessage]):
+        self._iterator = iterator
+        self._row_count = -1
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        # infinitely loops until we get a message we care about
+
+        while True:
+            next_message = await self._iterator.__anext__()
+            if isinstance(next_message, DataRow):
+                return next_message
+            elif isinstance(next_message, CommandComplete):
+                self._row_count = next_message.row_count
+                raise StopAsyncIteration
+
+    async def row_count(self):
+        """
+        Gets the row count for this query. This will discard ALL remaining data rows!
+        """
+        if self._row_count >= 0:
+            await anyio.sleep(0)  # checkpoint
+            return self._row_count
+
+        async for _ in self:
+            pass
+
+        return self._row_count
 
 
 # noinspection PyProtectedMember
@@ -268,7 +378,7 @@ async def open_database_connection(
         conn = AsyncPostgresConnection(sock, protocol)
 
         await conn._do_startup()
-        await conn._wait_until_ready()
+        await conn.wait_until_ready()
 
         # this sucks but we send a Terminate in the normal case, a Terminate in the case of a
         # database error, and a regular close in all other cases.

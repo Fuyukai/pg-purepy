@@ -12,7 +12,7 @@ async def test_converters_int():
             "int8",
             "oid",
         ):
-            result = await conn.simple_query_fetch(f"select 1::{cast};")
+            result = await conn.fetch(f"select 1::{cast};")
             assert result[0].data[0] == 1
 
 
@@ -21,8 +21,8 @@ async def test_converter_bool():
     Tests the boolean converter.
     """
     async with open_connection() as conn:
-        true = await conn.simple_query_fetch("select true;")
+        true = await conn.fetch("select true;")
         assert true[0].data[0] is True
 
-        false = await conn.simple_query_fetch("select false;")
+        false = await conn.fetch("select false;")
         assert false[0].data[0] is False
