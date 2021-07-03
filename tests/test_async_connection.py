@@ -1,4 +1,6 @@
 import pytest
+import trio.testing
+from async_generator import aclosing
 from pg_purepy import (
     MissingPasswordError,
     InvalidPasswordError,
@@ -7,7 +9,7 @@ from pg_purepy import (
     CommandComplete,
     RecoverableDatabaseError,
 )
-from pg_purepy.connection import open_database_connection
+from pg_purepy.connection import open_database_connection, QueryResult
 
 from tests.util import open_connection, POSTGRES_ADDRESS, POSTGRES_USERNAME
 
@@ -97,6 +99,31 @@ async def test_query_with_params():
         assert row.data[0] == 1
 
 
+async def test_get_row_count_no_rowcount():
+    """
+    Tests getting the row count of a command that doesn't return a row count.
+    """
+    async with open_connection() as conn:
+        row_count = await conn.execute("checkpoint;")
+        assert row_count == 0
+
+
+async def test_multiple_queries_one_execute():
+    """
+    Tests executing multiple queries in one execute.
+    """
+    async with open_connection() as conn:
+        async with aclosing(conn.lowlevel_query("select 1; select 2;")) as agen:
+            results = [i async for i in agen]
+
+        assert len(results) == 6
+        row1, row2 = results[1], results[4]
+
+        assert row1.data[0] == 1
+        assert row2.data[0] == 2
+
+
+## Transaction helper ##
 async def test_transaction_status_manual():
     """
     Tests getting the transaction status during a query.
@@ -151,6 +178,7 @@ async def test_transaction_helper_error():
         assert result[0].data[0] == 0
 
 
+## Prepared statements ##
 async def test_execute_prepared_statement_insert():
     """
     Tests executing a prepared statement with parameters.
@@ -244,9 +272,30 @@ async def test_notices():
     Tests handling notices in the stream.
     """
     async with open_connection() as conn:
-
-
-        with pytest.warns(UserWarning) as w:
+        with pytest.warns(UserWarning):
             await conn.execute(
                 "DO language plpgsql $$ BEGIN RAISE WARNING 'hello, world!'; END $$;"
             )
+
+        with pytest.warns(None) as w:
+            await conn.execute(
+                "DO language plpgsql $$ BEGIN RAISE NOTICE 'hello, world!'; END $$;"
+            )
+
+        assert not w
+
+
+## Misc ##
+async def test_get_cached_row_count():
+    """
+    Tests that getting the cached row count works.
+    """
+    async with open_connection() as conn:
+        async with conn.query("select 1;") as query:  # type: QueryResult
+            rows = [r async for r in query]
+            assert rows[0].data[0] == 1
+
+            assert await query.row_count() == 1
+
+            with trio.testing.assert_checkpoints():
+                assert await query.row_count() == 1
