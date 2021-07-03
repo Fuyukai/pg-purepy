@@ -34,7 +34,7 @@
 from itertools import count
 
 
-def convert_paramstyle(query, args):
+def convert_paramstyle(query, args):  # pragma: no cover
     # I don't see any way to avoid scanning the query string char by char,
     # so we might as well take that careful approach and create a
     # state-based scanner.  We'll use int variables for the state.

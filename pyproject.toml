@@ -35,7 +35,8 @@ source = ["pg_purepy"]
 
 [tool.coverage.report]
 exclude_lines = [
-    "raise UnknownMessageError"  # this only happens if the postgresql server breaks
+    "raise UnknownMessageError",  # this only happens if the postgresql server breaks
+    "pragma: no cover"  # defualt behaviour...
 ]
 
 [build-system]
