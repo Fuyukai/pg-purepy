@@ -22,12 +22,14 @@ Sphinx = ">=3.0,<4.0"
 sphinxcontrib-trio = "^1.1.2"
 sphinx-autodoc-typehints = "^1.12.0"
 trio = "^0.19.0"
-pytest-trio = "^0.7.0"
 pytest-cov = "^2.12.1"
 sphinx-rtd-theme = "^0.5.2"
+sphinx-inline-tabs = "^2021.4.11-beta.9"
 
 [tool.pytest.ini_options]
-trio_mode = true
+log_cli_level = "debug"
+log_cli = true
+addopts = "--cov --cov-report=html"
 
 [tool.coverage.run]
 branch = true

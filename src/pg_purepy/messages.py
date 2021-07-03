@@ -331,3 +331,27 @@ def wrap_error(response: ErrorOrNoticeResponse, query: str = None) -> BaseDataba
             return RecoverableDatabaseError(response, query)
         else:
             return UnrecoverableDatabaseError(response, query)
+
+
+__all__ = (
+    "PostgresMessage",
+    "AuthenticationRequest",
+    "BackendKeyData",
+    "AuthenticationCompleted",
+    "ParameterStatus",
+    "ReadyForQuery",
+    "QueryResultMessage",
+    "RowDescription",
+    "DataRow",
+    "CommandComplete",
+    "ParseComplete",
+    "ParameterDescription",
+    "PreparedStatementInfo",
+    "BindComplete",
+    "ErrorOrNoticeResponse",
+
+    "InvalidPasswordError",
+    "BaseDatabaseError",
+    "RecoverableDatabaseError",
+    "UnrecoverableDatabaseError",
+)

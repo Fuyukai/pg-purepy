@@ -13,6 +13,8 @@ from pg_purepy.connection import open_database_connection, QueryResult
 
 from tests.util import open_connection, POSTGRES_ADDRESS, POSTGRES_USERNAME
 
+pytestmark = pytest.mark.anyio
+
 
 async def test_basic_connection():
     """
@@ -286,7 +288,7 @@ async def test_notices():
 
 
 ## Misc ##
-async def test_get_cached_row_count():
+async def test_get_cached_row_count(anyio_backend):
     """
     Tests that getting the cached row count works.
     """
@@ -297,5 +299,6 @@ async def test_get_cached_row_count():
 
             assert await query.row_count() == 1
 
-            with trio.testing.assert_checkpoints():
-                assert await query.row_count() == 1
+            if anyio_backend == "trio":
+                with trio.testing.assert_checkpoints():
+                    assert await query.row_count() == 1

@@ -1,4 +1,8 @@
+import pytest
+
 from tests.util import open_connection
+
+pytestmark = pytest.mark.anyio
 
 
 async def test_converters_int():

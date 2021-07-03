@@ -221,11 +221,6 @@ class AsyncPostgresConnection(object):
                         yield message
 
     ## Mid-level API. ##
-    async def read_notice(self) -> ErrorOrNoticeResponse:
-        """
-        Waits until a notice arrives.
-        """
-
     @asynccontextmanager
     async def query(
         self,
@@ -280,6 +275,9 @@ class AsyncPostgresConnection(object):
 
         If you wish to lazily load the results of a query, use
         :meth:`~.AsyncPostgresConnection.query` instead.
+
+        :param query: Either a :class:`str` that contains the query text,
+                      or a :class:`~.PreparedStatementInfo` that represents a pre-prepared query.
         """
         async with self.query(query, *params, **kwargs) as q:
             return [i async for i in q]
@@ -287,6 +285,9 @@ class AsyncPostgresConnection(object):
     async def execute(self, query: Union[str, PreparedStatementInfo], *params, **kwargs) -> int:
         """
         Executes a query, returning its row count. This will discard all data rows.
+
+        :param query: Either a :class:`str` that contains the query text,
+              or a :class:`~.PreparedStatementInfo` that represents a pre-prepared query.
         """
         async with self.query(query, *params, **kwargs) as q:
             return await q.row_count()
@@ -294,10 +295,15 @@ class AsyncPostgresConnection(object):
 
 class QueryResult:
     """
-    Wraps the execution of a query.
+    Wraps the execution of a query. This can be asynchronously iterated over in order to get
+    incoming data rows.
     """
 
     def __init__(self, iterator: AsyncIterator[PostgresMessage]):
+        """
+        :param iterator: An iterator of :class:`.PostgresMessage` instances returned from the
+                         server.
+        """
         self._iterator = iterator
         self._row_count = -1
 
@@ -328,7 +334,11 @@ class QueryResult:
 
     async def row_count(self):
         """
-        Gets the row count for this query. This will discard ALL remaining data rows!
+        Gets the row count for this query.
+
+        .. warning::
+
+            This will discard any remaining data rows in the currently executing query.
         """
         if self._row_count >= 0:
             await anyio.sleep(0)  # checkpoint
@@ -361,10 +371,12 @@ async def open_database_connection(
             ...
 
     Required parameters:
+
     :param address_or_path: The address of the server or the *absolute path* of its Unix socket.
     :param username: The username to authenticate with.
 
     Optional parameters:
+
     :param port: The port to connect to. Ignored for unix sockets.
     :param password: The password to authenticate with.
     :param database: The database to connect to. Defaults to the username.
