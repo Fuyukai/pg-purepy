@@ -391,7 +391,6 @@ async def open_database_connection(
 
         raise
 
-    # Ew!
     async with sock:
         protocol = SansIOClient(username, database, password)
         conn = AsyncPostgresConnection(

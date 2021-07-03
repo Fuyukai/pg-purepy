@@ -9,33 +9,6 @@ def pack_strings(*s: str, encoding: str = "ascii") -> bytes:
     return b"\x00".join(x.encode(encoding) for x in s) + b"\x00"
 
 
-def unpack_strings(
-    b: bytes,
-    encoding: str = "ascii",
-    include_trailing: bool = False,
-) -> List[str]:
-    """
-    Unpacks a sequence of null terminated strings.
-    """
-    buf = bytearray()
-    items = []
-    for i, char in enumerate(b):
-        if char == 0x0:
-            # trailing terminators
-            if not buf and (i == len(b) - 1 and not include_trailing):
-                continue
-
-            items.append(buf.decode(encoding=encoding))
-            buf = bytearray()
-        else:
-            buf.append(char)
-
-    if len(buf) > 0:
-        raise ValueError("packed strings did not contain null terminator")
-
-    return items
-
-
 class Buffer(object):
     """
     Simple buffer that allows reading data off of a bytearray ala Java ByteBuffer.
