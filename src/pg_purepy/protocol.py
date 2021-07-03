@@ -27,7 +27,7 @@ from pg_purepy.messages import (
     AuthenticationRequest,
     ParameterStatus,
     ErrorResponseFieldType,
-    ErrorResponse,
+    ErrorOrNoticeResponse,
     AuthenticationCompleted,
     AuthenticationMethod,
     ReadyForQueryState,
@@ -109,18 +109,18 @@ _NO_HANDLE = object()
 
 
 def unrecoverable_error(
-    fn: Callable[[ProtocolMachine, BackendMessageCode, Buffer], PostgresMessage]
-) -> Callable[[ProtocolMachine, BackendMessageCode, Buffer], PostgresMessage]:
+    fn: Callable[[SansIOClient, BackendMessageCode, Buffer], PostgresMessage]
+) -> Callable[[SansIOClient, BackendMessageCode, Buffer], PostgresMessage]:
     """
     Decorator that will automatically set the state to an unrecoverable error if an error response
     is found.
     """
 
     @functools.wraps(fn)
-    def wrapper(self: ProtocolMachine, code: BackendMessageCode, body: Buffer):
+    def wrapper(self: SansIOClient, code: BackendMessageCode, body: Buffer):
         if code == BackendMessageCode.ERROR_RESPONSE:
             self.state = ProtocolState.UNRECOVERABLE_ERROR
-            error = self._decode_error_response(body, recoverable=False)
+            error = self._decode_error_response(body, recoverable=False, notice=False)
             self._logger.fatal(f"Unrecoverable error: {error.severity}: {error.message}")
             return error
 
@@ -238,7 +238,7 @@ class ProtocolState(enum.Enum):
 
 
 # noinspection PyMethodMayBeStatic
-class ProtocolMachine(object):
+class SansIOClient(object):
     """
     Sans-I/O state machine for the PostgreSQL C<->S protocol. This operates as an in-memory buffer
     that takes in Python-side structures and turns them into bytes to be sent to the server, and
@@ -391,12 +391,19 @@ class ProtocolMachine(object):
 
         return ParameterStatus(name, value)
 
-    def _decode_error_response(self, body: Buffer, *, recoverable: bool) -> ErrorResponse:
+    def _decode_error_response(
+        self,
+        body: Buffer,
+        *,
+        recoverable: bool,
+        notice: bool,
+    ) -> ErrorOrNoticeResponse:
         """
-        Decodes an error response, returning the :class:`.ErrorResponse` containing all the fields
-        from the message.
+        Decodes an error response, returning the :class:`.ErrorOrNoticeResponse` containing all the
+        fields from the message.
         """
-        kwargs = {"recoverable": recoverable}
+        kwargs = {"recoverable": recoverable, "notice": notice}
+        ignored_codes = {ord("F"), ord("L"), ord("R")}
 
         while body:
             try:
@@ -404,11 +411,16 @@ class ProtocolMachine(object):
                 if raw_code == 0:  # final null sep
                     break
 
+                if raw_code in ignored_codes:
+                    # discard body
+                    body.read_cstring(encoding="ascii")
+                    continue
+
                 code = ErrorResponseFieldType(raw_code)
             except ValueError:
                 code = ErrorResponseFieldType.UNKNOWN
 
-            str_field = body.read_cstring(encoding=self.encoding)
+            str_field = body.read_cstring(encoding="ascii")
             if code == ErrorResponseFieldType.UNKNOWN:
                 self._logger.warning(
                     f"Encountered unknown field type in error with value {str_field}"
@@ -416,11 +428,11 @@ class ProtocolMachine(object):
             else:
                 kwargs[code.name.lower()] = str_field
 
-        return ErrorResponse(**kwargs)
+        return ErrorOrNoticeResponse(**kwargs)
 
     def _decode_row_description(self, body: Buffer) -> RowDescription:
         """
-        Decodes the row description row.
+        Decodes the row description message.
         """
         field_count = body.read_short()
         self._logger.debug(f"Got {field_count} fields in this row description.")
@@ -642,7 +654,7 @@ class ProtocolMachine(object):
         elif code == BackendMessageCode.ERROR_RESPONSE:
             # this is a recoverable error, and simply moves onto the ReadyForQuery message.
             self.state = ProtocolState.RECOVERABLE_ERROR
-            error = self._decode_error_response(body, recoverable=True)
+            error = self._decode_error_response(body, recoverable=True, notice=False)
             self._logger.warning(f"Error during query: {error.severity}: {error.message}")
             return error
 
@@ -697,7 +709,7 @@ class ProtocolMachine(object):
         elif code == BackendMessageCode.ERROR_RESPONSE:
             # bad query
             self.state = ProtocolState.RECOVERABLE_ERROR
-            return self._decode_error_response(body, recoverable=True)
+            return self._decode_error_response(body, recoverable=True, notice=False)
 
         raise UnknownMessageError(f"Expected ParseComplete, got {code!r}")
 
@@ -714,7 +726,7 @@ class ProtocolMachine(object):
 
         return message
 
-    def _multi_query_got_no_data(self, body: Buffer):
+    def _multi_query_got_no_data(self):
         lnq = self._last_named_query if self._last_named_query else None
         self._last_named_query = None
         message = PreparedStatementInfo(lnq, ParameterDescription(self._last_parameter_oids), None)
@@ -731,7 +743,7 @@ class ProtocolMachine(object):
         """
         if code == BackendMessageCode.PARAMETER_DESCRIPTION:
             count = body.read_short()
-            oids = [body.read_int() for o in range(0, count)]
+            oids = [body.read_int() for _ in range(0, count)]
             self._last_parameter_oids = oids
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_PARAMETER_DESCRIPTION
             return ParameterDescription(oids)
@@ -754,7 +766,7 @@ class ProtocolMachine(object):
             return self._multi_query_got_description(body)
 
         elif code == BackendMessageCode.NO_DATA:
-            return self._multi_query_got_no_data(body)
+            return self._multi_query_got_no_data()
 
         raise UnknownMessageError(f"Expected RowDescription or NoData, got {code!r}")
 
@@ -771,7 +783,7 @@ class ProtocolMachine(object):
 
         elif code == BackendMessageCode.ERROR_RESPONSE:
             self.state = ProtocolState.RECOVERABLE_ERROR
-            return self._decode_error_response(body, recoverable=True)
+            return self._decode_error_response(body, recoverable=True, notice=False)
 
         raise UnknownMessageError(f"Expected BindComplete, got {code!r}")
 
@@ -1053,10 +1065,14 @@ class ProtocolMachine(object):
         code = BackendMessageCode(code)
         buffer = Buffer(message_data)
 
-        # we have special handling for parameter statuses, as they can handle in any state
-        # and repeating this block over and over would be annoying.
+        # These messages can happen at any state.
+        # As such, we yield them out unconditionally. Typically, a client ignores them and carries
+        # on reading messages off.
+
         if code == BackendMessageCode.PARAMETER_STATUS:
             return self._handle_parameter_status(buffer)
+        elif code == BackendMessageCode.NOTICE_RESPONSE:
+            return self._decode_error_response(body=buffer, recoverable=True, notice=True)
 
         # if we made it here, we can actually process the packet since we have it in full
 

@@ -1,5 +1,3 @@
-import logging
-
 import pytest
 from pg_purepy import (
     MissingPasswordError,
@@ -147,7 +145,7 @@ async def test_transaction_helper_error():
         assert not conn.in_transaction
         result = await conn.fetch(
             "select count(*) from pg_tables where tablename = :name;",
-            name="test_transaction_helper_normal",
+            name="test_transaction_helper_error",
         )
 
         assert result[0].data[0] == 0
@@ -163,15 +161,13 @@ async def test_execute_prepared_statement_insert():
         )
 
         st_no_params = await conn.create_prepared_statement(
-            name="test_epsp_1",
-            query="insert into test_epsi(foo) values ('one');"
+            name="test_epsp_1", query="insert into test_epsi(foo) values ('one');"
         )
         rows_no_params = await conn.execute(st_no_params)
         assert rows_no_params == 1
 
         st_with_params = await conn.create_prepared_statement(
-            name="test_epsp_2",
-            query="insert into test_epsi(foo) values ($1);"
+            name="test_epsp_2", query="insert into test_epsi(foo) values ($1);"
         )
         rows_params = await conn.execute(st_with_params, "two")
         assert rows_params == 1
@@ -225,7 +221,6 @@ async def test_update():
 async def test_delete():
     """
     Tests deleting data in a table.
-    :return:
     """
     async with open_connection() as conn:
         await conn.execute(
@@ -242,3 +237,16 @@ async def test_delete():
         post_delete = await conn.fetch("select * from test_delete;")
         assert len(post_delete) == 0
 
+
+## Notices ##
+async def test_notices():
+    """
+    Tests handling notices in the stream.
+    """
+    async with open_connection() as conn:
+
+
+        with pytest.warns(UserWarning) as w:
+            await conn.execute(
+                "DO language plpgsql $$ BEGIN RAISE WARNING 'hello, world!'; END $$;"
+            )

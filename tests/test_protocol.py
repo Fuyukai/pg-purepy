@@ -1,11 +1,11 @@
-from pg_purepy.protocol import ProtocolMachine, NEED_DATA, AuthenticationCompleted, ParameterStatus
+from pg_purepy.protocol import SansIOClient, NEED_DATA, AuthenticationCompleted, ParameterStatus
 
 
 def test_tricky_packet_truncation():
     """
     Tests when packets are truncated.
     """
-    state = ProtocolMachine(username="postgres")
+    state = SansIOClient(username="postgres")
     state.do_startup()
 
     # This has one missing NUL from the end.

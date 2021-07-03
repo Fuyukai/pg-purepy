@@ -4,6 +4,7 @@ The AnyIO implementation of the PostgreSQL client.
 
 from __future__ import annotations
 
+import warnings
 from contextlib import asynccontextmanager
 from os import PathLike
 from ssl import SSLContext
@@ -14,16 +15,18 @@ from typing import (
     TypeVar,
     Type,
     List,
+    Optional,
 )
 
 import anyio
 from anyio import Lock
 from anyio.abc import ByteStream
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from anyio.streams.tls import TLSStream
 from pg_purepy.dbapi import convert_paramstyle
 from pg_purepy.exc import IllegalStateError
 from pg_purepy.messages import (
-    ErrorResponse,
+    ErrorOrNoticeResponse,
     wrap_error,
     QueryResultMessage,
     PreparedStatementInfo,
@@ -34,7 +37,7 @@ from pg_purepy.messages import (
     CommandComplete,
 )
 from pg_purepy.protocol import (
-    ProtocolMachine,
+    SansIOClient,
     SSL_MESSAGE,
     check_if_tls_accepted,
     ProtocolParseError,
@@ -59,7 +62,7 @@ class AsyncPostgresConnection(object):
     def __init__(
         self,
         stream: ByteStream,
-        state: ProtocolMachine,
+        state: SansIOClient,
     ):
         self._stream = stream
         self._protocol = state
@@ -107,6 +110,11 @@ class AsyncPostgresConnection(object):
                 if next_event is NEED_DATA:
                     break
 
+                if isinstance(next_event, ErrorOrNoticeResponse) and next_event.notice:
+                    if next_event.severity == "WARNING":
+                        err = wrap_error(next_event)
+                        warnings.warn(str(err))
+
                 yield next_event
 
                 if isinstance(next_event, ReadyForQuery):
@@ -127,7 +135,7 @@ class AsyncPostgresConnection(object):
         """
         async with aclosing(self._read_until_ready()) as gen:
             async for message in gen:
-                if isinstance(message, ErrorResponse):
+                if isinstance(message, ErrorOrNoticeResponse):
                     err = wrap_error(message)
                     raise err
 
@@ -147,7 +155,7 @@ class AsyncPostgresConnection(object):
 
                     message_found = item
 
-                elif isinstance(item, ErrorResponse):
+                elif isinstance(item, ErrorOrNoticeResponse):
                     raise wrap_error(item)
 
             if message_found is None:
@@ -205,7 +213,7 @@ class AsyncPostgresConnection(object):
 
             async with aclosing(self._read_until_ready()) as agen:
                 async for message in agen:
-                    if isinstance(message, ErrorResponse):
+                    if isinstance(message, ErrorOrNoticeResponse) and not message.notice:
                         err = wrap_error(message)
                         raise err
 
@@ -213,6 +221,11 @@ class AsyncPostgresConnection(object):
                         yield message
 
     ## Mid-level API. ##
+    async def read_notice(self) -> ErrorOrNoticeResponse:
+        """
+        Waits until a notice arrives.
+        """
+
     @asynccontextmanager
     async def query(
         self,
@@ -378,9 +391,13 @@ async def open_database_connection(
 
         raise
 
+    # Ew!
     async with sock:
-        protocol = ProtocolMachine(username, database, password)
-        conn = AsyncPostgresConnection(sock, protocol)
+        protocol = SansIOClient(username, database, password)
+        conn = AsyncPostgresConnection(
+            sock,
+            protocol,
+        )
 
         await conn._do_startup()
         await conn.wait_until_ready()

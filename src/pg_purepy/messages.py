@@ -246,10 +246,13 @@ def _optional_int(value: Optional[str]) -> Optional[int]:
 
 
 @attr.s(slots=True, frozen=True)
-class ErrorResponse(PostgresMessage):
+class ErrorOrNoticeResponse(PostgresMessage):
     """
-    Returned when an error is encountered by the server.
+    Returned when an error or a notice message is produced from the server.
     """
+
+    #: If this error is a notice, rather than a real error.
+    notice: bool = attr.ib()
 
     #: If this error is recoverable or not.
     recoverable: bool = attr.ib()
@@ -274,11 +277,11 @@ class ErrorResponse(PostgresMessage):
 
 class BaseDatabaseError(PostgresqlError):
     """
-    An exception produceed from the database, usually from an ErrorResponse message. This does
+    An exception produceed from the database, usually from an ErrorOrNoticeResponse message. This does
     NOT include things such as protocol parsing errors.
     """
 
-    def __init__(self, response: ErrorResponse, query: str = None):
+    def __init__(self, response: ErrorOrNoticeResponse, query: str = None):
         self.response = response
 
     def __str__(self) -> str:
@@ -314,9 +317,9 @@ class InvalidPasswordError(UnrecoverableDatabaseError):
     """
 
 
-def wrap_error(response: ErrorResponse, query: str = None) -> BaseDatabaseError:
+def wrap_error(response: ErrorOrNoticeResponse, query: str = None) -> BaseDatabaseError:
     """
-    Wraps a :class:`.ErrorResponse` in an exception. If a query produced the error in question, then
+    Wraps a :class:`.ErrorOrNoticeResponse` in an exception. If a query produced the error in question, then
     passing it as the ``query`` param can produce a prettier error.
     """
     # TODO: More codes
