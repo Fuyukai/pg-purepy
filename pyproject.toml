@@ -12,7 +12,6 @@ classifiers = [
     "Topic :: Database",
     "Topic :: Database :: Front-Ends",
     "Operating System :: OS Independent",
-    "Software Development :: Libraries :: Python Modules",
 ]
 
 [tool.poetry.dependencies]
