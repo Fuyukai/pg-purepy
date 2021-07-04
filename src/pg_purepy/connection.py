@@ -104,7 +104,11 @@ class AsyncPostgresConnection(object):
 
         This must ONLY be called if the protocol is NOT ready.
         """
-        while not self._protocol.ready:
+        if self._protocol.ready:
+            await anyio.sleep(0)
+            return
+
+        while True:
             while True:
                 next_event = self._protocol.next_event()
                 if next_event is NEED_DATA:
@@ -257,6 +261,7 @@ class AsyncPostgresConnection(object):
         """
         Asynchronous context manager that automatically opens and closes a transaction.
         """
+
         try:
             await self.execute("begin;")
             yield
