@@ -23,9 +23,11 @@ class AuthenticationMethod(enum.IntEnum):
     """
     Enumeration of supported authentication methods.
     """
-
+    #: The server wishes for us to send our password in clear text.
     CLEARTEXT = 3
+    #: The server wishes for us to use MD5 hashing for our password.
     MD5 = 5
+    #: The server wishes for us to use SASL authentication.
     SASL = 10
 
 
@@ -51,10 +53,10 @@ class BackendKeyData(PostgresMessage):
     Misc data used for cancellation.
     """
 
-    #: The PID of this connection.
+    #: The :class:`int` PID of this connection.
     pid: int = attr.ib()
 
-    #: The secret key data of this connection.
+    #: The 64-biit :class:`int` secret key data of this connection.
     secret_key: int = attr.ib()
 
 
@@ -71,10 +73,10 @@ class ParameterStatus(PostgresMessage):
     Returned when a configuration parameter is changed, e.g. via SET.
     """
 
-    #: The name of the parameter.
+    #: The :class:`str` name of the parameter.
     name: str = attr.ib()
 
-    #: The value of the parameter.
+    #: The :class:`str` value of the parameter.
     value: str = attr.ib()
 
 
@@ -83,8 +85,13 @@ class ReadyForQueryState(enum.Enum):
     Enumeration of possible ReadyForQuery states.
     """
 
+    #: The server is idle and not in any transaction.
     IDLE = ord("I")
+
+    #: The server is currently in a transaction, and new commands can be issued.
     IN_TRANSACTION = ord("T")
+
+    #: The server is currently in a transaction that has errored, and no new commands can be issued.
     ERRORED_TRANSACTION = ord("E")
 
 
@@ -129,22 +136,22 @@ class ColumnDescription:
     A description of a column.
     """
 
-    #: The name of this column.
+    #: The :class:`str` name of this column.
     name: str = attr.ib()
 
-    #: The table OID of this column.
+    #: The optional :class:`int` table OID of this column.
     table_oid: Optional[int] = attr.ib()
 
-    #: The column index of this column.
+    #: The optional :class:`int` column index of this column.
     column_index: Optional[int] = attr.ib()
 
-    #: The type OID of this column.
+    #: The :class`int` type OID of this column.
     type_oid: int = attr.ib()
 
-    #: The internal column length.
+    #: The :class`int` internal column length.
     column_length: int = attr.ib()
 
-    #: The type modifier for this column.
+    #: The :class:`int` type modifier for this column.
     type_modifier: int = attr.ib()
 
 
@@ -160,7 +167,8 @@ class RowDescription(QueryResultMessage):
     """
     Describes the rows of a query.
     """
-
+    #: The list of :class:`.ColumnDescription` instances that wraps the decoding info for each
+    #: column returned in this row.
     columns: List[ColumnDescription] = attr.ib()
 
 
@@ -174,8 +182,8 @@ class DataRow(QueryResultMessage):
     #: The :class:`.RowDescription` that describes the data within this row.
     description: RowDescription = attr.ib()
 
-    #: A list of column values, in the same order as the description, that contains the actual data
-    #: incoming from the server.
+    #: A list of column values, in the same order as the description, that contains the actual
+    #: converted data incoming from the server.
     data: List[Any] = attr.ib()
 
 
@@ -185,11 +193,11 @@ class CommandComplete(QueryResultMessage):
     Returned when a single query command is complete.
     """
 
-    #: The command tag. Probably useless.
+    #: The :class:`str` command tag. Probably useless.
     tag: str = attr.ib()
 
-    #: The row count returned. This may be None if the command does not have a row count
-    #: (e.g. SHOW or SET).
+    #: The :class:`int` row count returned. This may be None if the command does not have a row
+    #: count (e.g. SHOW or SET).
     row_count: Optional[int] = attr.ib()
 
 
@@ -199,7 +207,7 @@ class ParseComplete(PostgresMessage):
     Returned when parsing a prepared statement completes.
     """
 
-    #: The name of the statement prepared. None means the unnamed prepared statement.
+    #: The :class:`str` name of the statement prepared. None means the unnamed prepared statement.
     statement_name: Optional[str] = attr.ib()
 
 
@@ -209,7 +217,7 @@ class ParameterDescription(PostgresMessage):
     Returned when parsing a ParameterDescription message.
     """
 
-    #: The OIDs within this description.
+    #: The list of :class:`int` OIDs within this description.
     oids: List[int] = attr.ib()
 
 
@@ -220,13 +228,13 @@ class PreparedStatementInfo(PostgresMessage):
     statement.
     """
 
-    #: The name of the prepared statement.
+    #: The :class:`str` name of the prepared statement.
     name: Optional[str] = attr.ib()
 
     #: The :class:`~.ParameterDescription` for the parameters for this prepared statement.
     parameter_oids: ParameterDescription = attr.ib()
 
-    #: The description of the incoming row data of the prepared statement.
+    #: The :class:`~.RowDescription` of the incoming row data of the prepared statement.
     #: This may be None if this query doesn't return any data.
     row_description: Optional[RowDescription] = attr.ib()
 
