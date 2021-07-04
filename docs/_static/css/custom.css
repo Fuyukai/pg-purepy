@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css?family=Overpass+Mono|Cabin|Quicksand&display=swap');
+
+
+div.highlight pre, span.pre {
+    font-family: "JetBrains Mono", "Overpass Mono", monospace !important;
+    font-size: 14px !important;
+}
+
+.rst-content code.literal {
+    font-family: "JetBrains Mono", "Overpass Mono", monospace !important;
+}
+
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: "Cabin";
+}
+
+p, li, strong, em, a {
+    font-family: "Cabin" !important;
+}
+
+/* get rid of annoying list margins */
+.rst-content .section ol li > *, .rst-content .section ul li > * {
+    margin-top: 0 !important;
+}
+
+
+/* Borrowed from the trio RTD */
+
+.wy-side-nav-search {
+    background-color: #75E6DE !important;
+}
+
+.wy-side-nav-search > a {
+    color: #000000 !important;
+}
+
+.wy-side-nav-search > a.logo {
+    display: block !important;
+    padding-bottom: 0.809em !important;
+}
+
+.wy-side-nav-search > a img.logo {
+    display: inline !important;
+    padding: 0 !important;
+}
