@@ -787,7 +787,6 @@ class SansIOClient(object):
 
         raise UnknownMessageError(f"Expected BindComplete, got {code!r}")
 
-    @unrecoverable_error
     def _handle_during_MULTI_QUERY_READING_DATA_ROWS(self, code: BackendMessageCode, body: Buffer):
         """
         Reads in data rows, and waits for CommandComplete and ReadyForQuery.
@@ -798,6 +797,11 @@ class SansIOClient(object):
         elif code == BackendMessageCode.COMMAND_COMPLETE:
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_COMMAND_COMPLETE
             return self._decode_command_complete(body)
+
+        elif code == BackendMessageCode.ERROR_RESPONSE:
+            # TODO: Maybe check the code, and reraise as unrecoverable?
+            self.state = ProtocolState.RECOVERABLE_ERROR
+            return self._decode_error_response(body, recoverable=True, notice=False)
 
         raise UnknownMessageError(f"Expected DataRow or CommandComplete, got {code!r}")
 

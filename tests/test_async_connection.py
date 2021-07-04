@@ -228,6 +228,22 @@ async def test_insert():
         assert result[0].data == [1, "test"]
 
 
+async def test_unparameterised_insert():
+    """
+    Tests inserting static data.
+    """
+
+    async with open_connection() as conn:
+        await conn.execute(
+            "create temp table test_insert2 (id serial primary key, foo text not null);"
+        )
+        row_count = await conn.execute("insert into test_insert2(foo) values ('test');")
+        assert row_count == 1
+        result = await conn.fetch("select * from test_insert2;")
+        assert len(result) == 1
+        assert result[0].data == [1, "test"]
+
+
 async def test_update():
     """
     Tests updating data in a table.
@@ -302,3 +318,16 @@ async def test_get_cached_row_count(anyio_backend):
             if anyio_backend == "trio":
                 with trio.testing.assert_checkpoints():
                     assert await query.row_count() == 1
+
+
+async def test_insert_into_not_null():
+    """
+    Tests inserting into a not-null table.
+    """
+    async with open_connection() as conn:
+        await conn.execute("create temp table test (id int primary key);")
+
+        with pytest.raises(RecoverableDatabaseError) as e:
+            await conn.execute("insert into test(id) values (:n);", n=None)
+
+        assert e.value.response.code == "23502"
