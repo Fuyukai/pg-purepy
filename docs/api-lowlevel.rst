@@ -51,7 +51,7 @@ then you have finished the whole loop and should break out of both the inner and
 
     while True:
         event = protocol.next_event()
-        if event == NO_DATA:
+        if event == NEED_DATA:
             break
 
         # optional, you can just yield it or whatever else
@@ -60,6 +60,10 @@ then you have finished the whole loop and should break out of both the inner and
         do_something_with_event(event)
         if isinstance(event, ReadyForQuery):
             return
+
+.. data:: pg_purepy.NO_DATA
+
+    A dummy sentinel value used to signal the client needs more data to proceed.
 
 .. automethod:: pg_purepy.SansIOClient.next_event
 
