@@ -74,18 +74,32 @@ async def test_query_after_error():
     Tests running a second query after a first query raises an error.
     """
     async with open_connection() as conn:
-        with pytest.raises(RecoverableDatabaseError) as e:
+        # simple queries
+        with pytest.raises(RecoverableDatabaseError) as e1:
             _ = await conn.fetch("select * from nonexistent;")
 
-        assert e.value.response.code == "42P01"
+        assert e1.value.response.code == "42P01"
 
-        result = await conn.fetch("select 1;")
-        assert len(result) == 1
+        result_1 = await conn.fetch("select 1;")
+        assert len(result_1) == 1
 
-        row = result[0]
-        assert isinstance(row, DataRow)
-        assert len(row.data) == 1
-        assert row.data[0] == 1
+        row_1 = result_1[0]
+        assert isinstance(row_1, DataRow)
+        assert len(row_1.data) == 1
+        assert row_1.data[0] == 1
+
+        with pytest.raises(RecoverableDatabaseError) as e2:
+            await conn.fetch("select * from nonexistent where 'a' = :a;", a="a")
+
+        assert e2.value.response.code == "42P01"
+
+        result_2 = await conn.fetch("select 2 where 'a' = :a;", a="a")
+        assert len(result_2) == 1
+
+        row_2 = result_2[0]
+        assert isinstance(row_2, DataRow)
+        assert len(row_2.data) == 1
+        assert row_2.data[0] == 2
 
 
 async def test_query_with_params():
