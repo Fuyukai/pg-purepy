@@ -25,10 +25,6 @@ Requirements
 2. ``pg-purepy`` requires the latest version of PostgreSQL, although in practice the protocol parser
    should work with versions from 9.4 upwards.
 
-3. Whilst the asynchronous API of ``pg-purepy`` is written using the ``anyio`` library, this
-   library only actively supports the Trio backend. asyncio compatibility should work, but it is
-   incidental and not actively supported.
-
 .. toctree::
    :maxdepth: 3
    :caption: Meta Information

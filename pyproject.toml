@@ -13,6 +13,7 @@ classifiers = [
     "Topic :: Database :: Front-Ends",
     "Operating System :: OS Independent",
 ]
+readme = "README.rst"
 
 [tool.poetry.dependencies]
 python = "^3.8"
