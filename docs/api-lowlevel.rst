@@ -236,4 +236,6 @@ The client object exposes a number of useful read-only properties.
     :members:
     :undoc-members:
 
+.. autoattribute:: pg_purepy.SansIOClient.dead
+
 .. _sans-IO: https://sans-io.readthedocs.io/

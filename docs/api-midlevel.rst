@@ -1,11 +1,10 @@
 .. _midlevel:
 
-Mid-level API
-=============
+Asynchronous API
+================
 
-The mid-level API combines the client of the low-level API with the asynchronous capabilities of
-the ``anyio`` library to create an actual, networked client. If you want to provide your own
-connection pooling logic, for example, you will want to build on top of the mid-level API.
+This API combines the client of the low-level API with the asynchronous capabilities of
+the ``anyio`` library to create an actual, networked client.
 
 Connecting
 ----------
@@ -32,8 +31,6 @@ finer control of the actual messages arriving.
     Querying to the server is protected by a lock, as only one query can be issued at once. Allowing
     multiple queries simultaneously would require complex tracking logic for incoming messages, and
     wouldn't help anyway because the server only processes one query at a time.
-
-    If you want the ability to do queries simultaneously, use the high-level API.
 
 Querying, Eagerly
 -----------------
@@ -145,7 +142,7 @@ protocol, as well as handling any error responses.
 
 .. code-block:: python3
 
-    async with aclosing(conn.query("select * from table") as agen:
+    async with aclosing(conn.query("select * from table")) as agen:
         async for message in agen:
             if isinstance(message, RowDescription):
                 print(f"Got row description:", message)
@@ -204,3 +201,5 @@ The connection class exposes a handful of potentially useful properties:
 .. autoattribute:: pg_purepy.AsyncPostgresConnection.ready
 
 .. autoattribute:: pg_purepy.AsyncPostgresConnection.in_transaction
+
+.. autoattribute:: pg_purepy.AsyncPostgresConnection.dead
