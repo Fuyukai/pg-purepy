@@ -368,6 +368,13 @@ class SansIOClient(object):
         """
         return len(self._buffer) > 0
 
+    @property
+    def dead(self) -> bool:
+        """
+        If the protocol is "dead", i.e. unusable via an error or terminated.
+        """
+        return self._state in {ProtocolState.UNRECOVERABLE_ERROR, ProtocolState.TERMINATED}
+
     ## Internal API ##
     def _check_password(self):
         if self._password is None:

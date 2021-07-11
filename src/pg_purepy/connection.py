@@ -15,13 +15,11 @@ from typing import (
     TypeVar,
     Type,
     List,
-    Optional,
 )
 
 import anyio
-from anyio import Lock
+from anyio import Lock, EndOfStream
 from anyio.abc import ByteStream
-from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from anyio.streams.tls import TLSStream
 from pg_purepy.dbapi import convert_paramstyle
 from pg_purepy.exc import IllegalStateError
@@ -69,6 +67,9 @@ class AsyncPostgresConnection(object):
 
         self._query_lock = Lock()
 
+        # marks if the connection is dead, usually if a connection error happens during read/write.
+        self._dead = False
+
     @property
     def ready(self) -> bool:
         """
@@ -83,19 +84,44 @@ class AsyncPostgresConnection(object):
         """
         return self._protocol.in_transaction
 
+    @property
+    def dead(self) -> bool:
+        """
+        Returns if this connection is dead or otherwise unusable.
+        """
+        if self._dead:
+            return True
+
+        return self._protocol.dead
+
+    async def _read(self):
+        try:
+            return await self._stream.receive()
+        except (ConnectionError, EndOfStream):
+            self._dead = True
+            raise
+
+    async def _write(self, item):
+        try:
+            return await self._stream.send(item)
+        except (ConnectionError, EndOfStream):
+            self._dead = True
+            raise
+
     async def _do_startup(self):
         """
         Sends the startup message.
         """
         data = self._protocol.do_startup()
-        await self._stream.send(data)
+        await self._write(data)
 
     async def _terminate(self):
         """
         Terminates the protocol. Does not close the connection.
         """
         data = self._protocol.do_terminate()
-        await self._stream.send(data)
+        await self._write(data)
+        self._dead = True
 
     async def _read_until_ready(self):
         """
@@ -127,9 +153,9 @@ class AsyncPostgresConnection(object):
 
             to_send = self._protocol.get_needed_synchronisation()
             if to_send:
-                await self._stream.send(to_send)
+                await self._write(to_send)
 
-            received = await self._stream.receive(65536)
+            received = await self._read()
             self._protocol.receive_bytes(received)
 
     async def wait_until_ready(self):
@@ -176,7 +202,7 @@ class AsyncPostgresConnection(object):
         :param query: The query to use.
         """
         to_send = self._protocol.do_create_prepared_statement(name=name, query_text=query)
-        await self._stream.send(to_send)
+        await self._write(to_send)
         pc = await self._wait_for_message(PreparedStatementInfo)
         return pc
 
@@ -199,7 +225,7 @@ class AsyncPostgresConnection(object):
             simple_query = not ((params or kwargs) or isinstance(query, PreparedStatementInfo))
             if simple_query:
                 data = self._protocol.do_simple_query(query)
-                await self._stream.send(data)
+                await self._write(data)
             else:
                 if not isinstance(query, PreparedStatementInfo):
                     real_query, params = convert_paramstyle(query, kwargs)
@@ -208,7 +234,7 @@ class AsyncPostgresConnection(object):
                     info = query
 
                 bound_data = self._protocol.do_bind_execute(info, params)
-                await self._stream.send(bound_data)
+                await self._write(bound_data)
                 # we need to get BindComplete because we need to yield the statement's
                 # RowDescription out, for a more "consistent" view.
                 await self._wait_for_message(BindComplete, wait_until_ready=False)

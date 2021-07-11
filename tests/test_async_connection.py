@@ -310,9 +310,7 @@ async def test_notices():
             )
 
         with pytest.warns(None) as w:
-            await conn.execute(
-                "DO language plpgsql $$ BEGIN RAISE NOTICE 'hello, world!'; END $$;"
-            )
+            await conn.execute("DO language plpgsql $$ BEGIN RAISE NOTICE 'hello, world!'; END $$;")
 
         assert not w
 

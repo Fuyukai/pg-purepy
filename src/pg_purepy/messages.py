@@ -23,6 +23,7 @@ class AuthenticationMethod(enum.IntEnum):
     """
     Enumeration of supported authentication methods.
     """
+
     #: The server wishes for us to send our password in clear text.
     CLEARTEXT = 3
     #: The server wishes for us to use MD5 hashing for our password.
@@ -167,6 +168,7 @@ class RowDescription(QueryResultMessage):
     """
     Describes the rows of a query.
     """
+
     #: The list of :class:`.ColumnDescription` instances that wraps the decoding info for each
     #: column returned in this row.
     columns: List[ColumnDescription] = attr.ib()
@@ -357,7 +359,6 @@ __all__ = (
     "PreparedStatementInfo",
     "BindComplete",
     "ErrorOrNoticeResponse",
-
     "InvalidPasswordError",
     "BaseDatabaseError",
     "RecoverableDatabaseError",
