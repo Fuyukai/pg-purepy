@@ -64,9 +64,17 @@ class Buffer(object):
         """
         items = []
         while self.data:
-            items += self.read_cstring(encoding)
+            items.append(self.read_cstring(encoding))
 
         if drop_empty:
-            return [i for i in items if not i]
+            return [i for i in items if i]
         else:
             return items
+
+    def read_remaining(self) -> bytes:
+        """
+        Reads out the remainer of this buffer.
+        """
+        ba = bytes(bytearray(self.data))
+        self.data = deque()
+        return ba

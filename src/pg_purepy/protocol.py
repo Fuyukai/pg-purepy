@@ -41,7 +41,7 @@ from pg_purepy.messages import (
     ParseComplete,
     PreparedStatementInfo,
     ParameterDescription,
-    BindComplete,
+    BindComplete, SASLContinue, SASLComplete,
 )
 from pg_purepy.util import pack_strings, Buffer
 from scramp import ScramClient
@@ -570,6 +570,19 @@ class SansIOClient(object):
         else:
             raise UnknownMessageError(f"Don't know how to handle {code} in {self.state}")
 
+    def _handle_during_SASL_FIRST_SENT(self, code: BackendMessageCode, body: Buffer):
+        if code == BackendMessageCode.AUTHENTICATION_REQUEST:
+            body_code = body.read_int()
+            if body_code == 11:  # SASL Continue
+                sasl_body = body.read_remaining().decode("ascii")
+                self._scramp_client.set_server_first(sasl_body)
+                self.state = ProtocolState.SASL_FIRST_RECEIVED
+                return SASLContinue()
+            else:
+                raise ProtocolParseError(
+                    f"Unexpected response: Expected SASLContinue, but got {body_code}"
+                )
+
     @unrecoverable_error
     def _generic_auth_handle(self, code: BackendMessageCode, body: Buffer):
         """
@@ -581,6 +594,8 @@ class SansIOClient(object):
                 self.is_authenticated = True
                 self.state = ProtocolState.AUTHENTICATED_WAITING_FOR_COMPLETION
                 return AuthenticationCompleted()
+            elif body_code == 12:  # SASLComplete
+                return SASLComplete()
             else:
                 raise ProtocolParseError(
                     f"Unexpected response: Expected AuthenticationOk, but got {body_code}"
@@ -1046,7 +1061,7 @@ class SansIOClient(object):
 
             code = self._buffer[0]
             size = int.from_bytes(self._buffer[1:5], byteorder="big") - 4
-            message_data = self._buffer[5 : size + 5]
+            message_data = self._buffer[5: size + 5]
 
             if len(message_data) < size:
                 self._logger.debug(
@@ -1063,7 +1078,7 @@ class SansIOClient(object):
             else:
                 # yes enough data, set the buffer to the data after the size bytes for future
                 # processing
-                self._buffer = self._buffer[size + 5 :]
+                self._buffer = self._buffer[size + 5:]
 
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")

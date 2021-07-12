@@ -49,6 +49,20 @@ class AuthenticationRequest(PostgresMessage):
 
 
 @attr.s(slots=True, frozen=True)
+class SASLContinue(PostgresMessage):
+    """
+    Returned when the PostgreSQL server wants us to continue doing SASL authentication.
+    """
+
+
+@attr.s(slots=True, frozen=True)
+class SASLComplete(PostgresMessage):
+    """
+    Returned when SASL authentication is complete.
+    """
+
+
+@attr.s(slots=True, frozen=True)
 class BackendKeyData(PostgresMessage):
     """
     Misc data used for cancellation.
