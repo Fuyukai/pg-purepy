@@ -31,6 +31,7 @@ Requirements
    :caption: Meta Information
 
    installation.rst
+   changelog.rst
    current-support.rst
 
 .. toctree::
