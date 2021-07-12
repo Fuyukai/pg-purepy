@@ -4,6 +4,7 @@ The AnyIO implementation of the PostgreSQL client.
 
 from __future__ import annotations
 
+import logging
 import warnings
 from contextlib import asynccontextmanager
 from os import PathLike
@@ -15,11 +16,12 @@ from typing import (
     TypeVar,
     Type,
     List,
+    Tuple,
 )
 
 import anyio
 from anyio import Lock, EndOfStream
-from anyio.abc import ByteStream
+from anyio.abc import ByteStream, SocketStream
 from anyio.streams.tls import TLSStream
 from pg_purepy.dbapi import convert_paramstyle
 from pg_purepy.exc import IllegalStateError
@@ -33,6 +35,7 @@ from pg_purepy.messages import (
     PostgresMessage,
     DataRow,
     CommandComplete,
+    BackendKeyData,
 )
 from pg_purepy.protocol import (
     SansIOClient,
@@ -47,6 +50,8 @@ try:
     from contextlib import aclosing
 except ImportError:
     from async_generator import aclosing
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -69,6 +74,9 @@ class AsyncPostgresConnection(object):
 
         # marks if the connection is dead, usually if a connection error happens during read/write.
         self._dead = False
+
+        # backend PID as returned from postgresql.
+        self._pid: int = -1
 
     @property
     def ready(self) -> bool:
@@ -93,6 +101,9 @@ class AsyncPostgresConnection(object):
             return True
 
         return self._protocol.dead
+
+    def __repr__(self):
+        return f"<{type(self).__name__} pid='{self._pid!r}'>"
 
     async def _read(self):
         try:
@@ -144,6 +155,9 @@ class AsyncPostgresConnection(object):
                     if next_event.severity == "WARNING":
                         err = wrap_error(next_event)
                         warnings.warn(str(err))
+
+                elif isinstance(next_event, BackendKeyData):
+                    self._pid = next_event.pid
 
                 yield next_event
 
@@ -381,6 +395,60 @@ class QueryResult:
         return self._row_count
 
 
+async def _open_connection(
+    address_or_path: Union[str, PathLike],
+    username: str,
+    *,
+    port: int = 5432,
+    password: str = None,
+    database: str = None,
+    ssl_context: SSLContext = None,
+) -> Tuple[SocketStream, AsyncPostgresConnection]:
+    """
+    Actual implementation of connection opening.
+    """
+    # this method necessarily requires more error handling considerations than an ``async with``
+    # approach, but this method is specifically designed for the connection pool.
+
+    if address_or_path.startswith("/"):
+        logger.debug(f"Opening unix connection to {address_or_path}")
+        sock = await anyio.connect_unix(address_or_path)
+    else:
+        logger.debug(f"Opening TCP connection to {address_or_path}:{port}")
+        sock = await anyio.connect_tcp(remote_host=address_or_path, remote_port=port)
+
+    try:
+        if ssl_context:
+            logger.debug("Using TLS for the connection...")
+
+            await sock.send(SSL_MESSAGE)
+            response = await sock.receive(1)
+            if not check_if_tls_accepted(response):
+                raise ProtocolParseError("Requested TLS, but server said no")
+
+            sock = await TLSStream.wrap(
+                sock, hostname=address_or_path, ssl_context=ssl_context, standard_compatible=True
+            )
+    except BaseException:
+        await sock.aclose()
+        raise
+
+    protocol = SansIOClient(username, database, password)
+    conn = AsyncPostgresConnection(
+        sock,
+        protocol,
+    )
+
+    try:
+        await conn._do_startup()
+        await conn.wait_until_ready()
+    except BaseException:
+        await sock.aclose()
+        raise
+
+    return sock, conn
+
+
 # noinspection PyProtectedMember
 @asynccontextmanager
 async def open_database_connection(
@@ -413,39 +481,18 @@ async def open_database_connection(
     :param database: The database to connect to. Defaults to the username.
     :param ssl_context: The SSL context to use for TLS connection. Enables TLS if specified.
     """
-    if address_or_path.startswith("/"):
-        sock = await anyio.connect_unix(address_or_path)
-    else:
-        sock = await anyio.connect_tcp(remote_host=address_or_path, remote_port=port)
-
-    try:
-        if ssl_context:
-            await sock.send(SSL_MESSAGE)
-            response = await sock.receive(1)
-            if not check_if_tls_accepted(response):
-                raise ProtocolParseError("Requested TLS, but server said no")
-
-            sock = await TLSStream.wrap(
-                sock, hostname=address_or_path, ssl_context=ssl_context, standard_compatible=True
-            )
-    except BaseException:
-        with anyio.move_on_after(delay=0.5, shield=True):
-            await sock.aclose()
-
-        raise
+    sock, conn = await _open_connection(
+        address_or_path=address_or_path,
+        username=username,
+        port=port,
+        password=password,
+        database=database,
+        ssl_context=ssl_context,
+    )
 
     async with sock:
-        protocol = SansIOClient(username, database, password)
-        conn = AsyncPostgresConnection(
-            sock,
-            protocol,
-        )
-
-        await conn._do_startup()
-        await conn.wait_until_ready()
-
         # this sucks but we send a Terminate in the normal case, a Terminate in the case of a
-        # database error, and a regular close in all other cases.
+        # database error, and a regular socket/TLS close in all other cases.
         try:
             yield conn
             await conn._terminate()

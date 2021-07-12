@@ -1,8 +1,10 @@
 """
 Index of builtin converters.
 """
+from __future__ import annotations
+
 import abc
-from typing import Any, Callable, Tuple, Dict, List
+from typing import Any, List
 
 import attr
 

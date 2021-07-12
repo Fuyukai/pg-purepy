@@ -1,10 +1,16 @@
 .. _midlevel:
 
-Asynchronous API
-================
+Asynchronous connection API
+===========================
 
 This API combines the client of the low-level API with the asynchronous capabilities of
 the ``anyio`` library to create an actual, networked client.
+
+.. warning::
+
+    You probably don't want to use this class directly. Instead, use the :ref:`highlevel` when
+    possible. You should still read the documentation for this API, however, especially if you
+    wish to use pooled transactions.
 
 Connecting
 ----------
@@ -13,6 +19,14 @@ In order to get anywhere, you need to actually connect to the server.
 
 .. autofunction:: pg_purepy.open_database_connection
     :async-with: conn
+
+.. autoclass:: pg_purepy.AsyncPostgresConnection
+
+    .. autoattribute:: pg_purepy.AsyncPostgresConnection.ready
+
+    .. autoattribute:: pg_purepy.AsyncPostgresConnection.in_transaction
+
+    .. autoattribute:: pg_purepy.AsyncPostgresConnection.dead
 
 Querying
 --------
@@ -193,13 +207,3 @@ block, or rollback if an error happens.
     transaction. This would require overly complicated locking logic! Instead, wrap your acquisition
     of this inside a different lock, and guard all other transaction helpers with it.
 
-Connection Properties
----------------------
-
-The connection class exposes a handful of potentially useful properties:
-
-.. autoattribute:: pg_purepy.AsyncPostgresConnection.ready
-
-.. autoattribute:: pg_purepy.AsyncPostgresConnection.in_transaction
-
-.. autoattribute:: pg_purepy.AsyncPostgresConnection.dead

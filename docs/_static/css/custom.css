@@ -24,6 +24,9 @@ p, li, strong, em, a {
     margin-top: 0 !important;
 }
 
+.wy-nav-content {
+    max-width: 900px;
+}
 
 /* Borrowed from the trio RTD */
 

@@ -7,17 +7,16 @@ Welcome to pg-purepy's documentation!
 =====================================
 
 ``pg-purepy`` is a Python 3.9+ library for connecting to a PostgreSQL server. As the name suggests,
-it is written in pure-Python (no C dependencies), and exports two APIs:
+it is written in pure-Python (no C dependencies), and exports three APIs:
 
-1. An asynchronous anyio API, based on singular connections, that handles the protocol parsing
-   and networking for you.
+1. A high-level asynchronous AnyIO API based on connection pooling, that wraps multiple individual
+   persistent connections.
+
+2. An mid-level asynchronous anyio API, based on singular connections, that handles the protocol
+   parsing and networking for you.
 
 2. A low-level sans-IO API, which only does protocol parsing and has no niceness but is ideal for
    writing your own client.
-
-``pg-purepy`` does not export a connection pooling API that you might find in other places; I found
-that designing a "generic" pooling API doesn't really work especially when it comes to error
-handling. You should handle connection pooling in your application directly.
 
 Requirements
 ------------
@@ -41,3 +40,4 @@ Requirements
    messages.rst
    api-lowlevel.rst
    api-midlevel.rst
+   api-highlevel.rst
