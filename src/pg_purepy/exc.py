@@ -11,7 +11,7 @@ class PostgresqlError(Exception):
     """
 
 
-class ConnectionForciblyKilledError(Exception):
+class ConnectionForciblyKilledError(PostgresqlError):
     """
     Raised when a connection is forcibly killed.
     """

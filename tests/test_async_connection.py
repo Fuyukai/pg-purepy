@@ -8,6 +8,7 @@ from pg_purepy import (
     DataRow,
     CommandComplete,
     RecoverableDatabaseError,
+    ProtocolParseError,
 )
 from pg_purepy.connection import open_database_connection, QueryResult
 
@@ -322,6 +323,32 @@ async def test_notices():
             await conn.execute("DO language plpgsql $$ BEGIN RAISE NOTICE 'hello, world!'; END $$;")
 
         assert not w
+
+
+## Runtime Configuration ##
+async def test_set_parameter():
+    """
+    Tests setting a runtime configuration parameter.
+    """
+
+    async with open_connection() as conn:
+        await conn.execute("set application_name to 'test';")
+
+        assert "application_name" in conn.connection_parameters
+        assert conn.connection_parameters["application_name"] == "test"
+
+        row = await conn.fetch("show application_name;")
+        assert row[0].data[0] == conn.connection_parameters["application_name"]
+
+
+async def test_set_illegal_parameter():
+    """
+    Tests setting an illegal parameter.
+    """
+
+    async with open_connection() as conn:
+        with pytest.raises(ProtocolParseError) as e:
+            await conn.execute("set DateStyle to 'Postgres, MDY';")
 
 
 ## Misc ##

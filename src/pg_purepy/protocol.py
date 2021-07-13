@@ -38,7 +38,8 @@ from pg_purepy.messages import (
     ParameterDescription,
     BindComplete,
     SASLContinue,
-    SASLComplete, PortalSuspended,
+    SASLComplete,
+    PortalSuspended,
 )
 from pg_purepy.conversion import apply_default_converters
 from pg_purepy.util import pack_strings, Buffer
@@ -264,6 +265,11 @@ class SansIOClient(object):
 
     _COMMANDS_WITH_COUNTS = {"DELETE", "UPDATE", "SELECT", "MOVE", "FETCH", "COPY"}
 
+    _PROTECTED_STATUSES = {
+        "IntervalStyle": "iso_8601",
+        "DateStyle": "ISO, DMY",
+    }
+
     def __init__(
         self,
         username: str,
@@ -402,6 +408,10 @@ class SansIOClient(object):
         """
         encoding = self._conversion_context.client_encoding
         name, value = body.read_cstring(encoding), body.read_cstring(encoding)
+
+        if name in self._PROTECTED_STATUSES and value != self._PROTECTED_STATUSES[name]:
+            self.state = ProtocolState.UNRECOVERABLE_ERROR
+            raise ProtocolParseError(f"Attempted to change protected connection parameter {name}!")
 
         if name == "client_encoding":
             self._conversion_context.client_encoding = value
@@ -892,6 +902,8 @@ class SansIOClient(object):
         packet_body += pack_strings("database", self.database)
         packet_body += pack_strings("application_name", self.application_name)
         packet_body += pack_strings("client_encoding", self._conversion_context.client_encoding)
+        packet_body += pack_strings("IntervalStyle", "iso_8601")
+        packet_body += pack_strings("DateStyle", "ISO, DMY")
         packet_body += b"\x00"
         size = struct.pack("!i", (len(packet_body) + 4))
 

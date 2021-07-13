@@ -5,6 +5,7 @@ The AnyIO implementation of the PostgreSQL client.
 from __future__ import annotations
 
 import logging
+import types
 import warnings
 from contextlib import asynccontextmanager
 from os import PathLike
@@ -17,6 +18,9 @@ from typing import (
     Type,
     List,
     Tuple,
+    Dict,
+    MappingView,
+    Mapping,
 )
 
 import anyio
@@ -101,6 +105,13 @@ class AsyncPostgresConnection(object):
             return True
 
         return self._protocol.dead
+
+    @property
+    def connection_parameters(self) -> Mapping[str, str]:
+        """
+        Returns a read-only view of the current connection;
+        """
+        return types.MappingProxyType(self._protocol.connection_params)
 
     def __repr__(self):
         return f"<{type(self).__name__} pid='{self._pid!r}'>"
