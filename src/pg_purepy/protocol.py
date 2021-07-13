@@ -9,14 +9,9 @@ import logging
 import struct
 from hashlib import md5
 from itertools import count as it_count
-from typing import Union, Optional, Callable, Dict, Any, List
+from typing import Union, Optional, Callable, Dict, Any, List, TYPE_CHECKING
 
-from pg_purepy.converters import (
-    Converter,
-    DEFAULT_CONVERTERS,
-    ConversionContext,
-    DEFAULT_TEXT_CONVERTER,
-)
+import attr
 from pg_purepy.exc import (
     MissingPasswordError,
     ProtocolParseError,
@@ -41,10 +36,16 @@ from pg_purepy.messages import (
     ParseComplete,
     PreparedStatementInfo,
     ParameterDescription,
-    BindComplete, SASLContinue, SASLComplete,
+    BindComplete,
+    SASLContinue,
+    SASLComplete,
 )
+from pg_purepy.conversion import apply_default_converters
 from pg_purepy.util import pack_strings, Buffer
 from scramp import ScramClient
+
+if TYPE_CHECKING:
+    from pg_purepy.conversion.abc import Converter
 
 # static messages with no params
 FLUSH_MESSAGE = b"H\x00\x00\x00\x04"
@@ -237,6 +238,17 @@ class ProtocolState(enum.Enum):
     TERMINATED = 9999
 
 
+@attr.s(slots=True, frozen=False)
+class ConversionContext:
+    """
+    A conversion context contains information that might be needed to convert from the PostgreSQL
+    string representation to the real representation.
+    """
+
+    #: The encoding of the client.
+    client_encoding: str = attr.ib()
+
+
 # noinspection PyMethodMayBeStatic
 class SansIOClient(object):
     """
@@ -283,7 +295,7 @@ class SansIOClient(object):
         self.is_authenticated = False
 
         #: The converter classes used to convert between PostgreSQL and Python types.
-        self.converters: Dict[int, Converter] = {i.oid: i for i in DEFAULT_CONVERTERS}
+        self.converters: Dict[int, Converter] = {}
 
         #: Boolean value for if the current connection is in a transaction.
         self.in_transaction: bool = False
@@ -333,6 +345,8 @@ class SansIOClient(object):
         self._processing_partial_packet = False
 
         self._logger = logging.getLogger(logger_name)
+
+        apply_default_converters(self)
 
     @property
     def state(self) -> ProtocolState:
@@ -494,8 +508,11 @@ class SansIOClient(object):
 
             col_desc = self._last_row_description.columns[idx]
             col_oid = col_desc.type_oid
-            converter = self.converters.get(col_oid, DEFAULT_TEXT_CONVERTER)
-            data = converter.from_postgres(self._conversion_context, data.decode(self.encoding))
+            converter = self.converters.get(col_oid)
+            if converter is None:
+                data = data.decode(self.encoding)
+            else:
+                data = converter.from_postgres(self._conversion_context, data.decode(self.encoding))
             column_values.append(data)
 
         return DataRow(self._last_row_description, column_values)
@@ -889,7 +906,7 @@ class SansIOClient(object):
             raise IllegalStateError("The server is not ready for queries")
 
         self._logger.debug(f"Sending static query {query_text}")
-        packet_body = pack_strings(query_text, encoding=self._conversion_context.client_encoding)
+        packet_body = pack_strings(query_text, encoding=self.encoding)
         header = FrontendMessageCode.QUERY.to_bytes(length=1, byteorder="big")
         header += (len(packet_body) + 4).to_bytes(length=4, byteorder="big")
 
@@ -912,10 +929,10 @@ class SansIOClient(object):
             packet_body_1 = b"\x00"  # empty string
             self._last_named_query = None
         else:
-            packet_body_1 = pack_strings(name, encoding=self._conversion_context.client_encoding)
+            packet_body_1 = pack_strings(name, encoding="ascii")
             self._last_named_query = name
 
-        packet_body_1 += pack_strings(query_text, encoding=self._conversion_context.client_encoding)
+        packet_body_1 += pack_strings(query_text, encoding=self.encoding)
         # no OIDs. (yet). probably in the future...
         packet_body_1 += b"\x00\x00"
 
@@ -976,10 +993,12 @@ class SansIOClient(object):
                 packet_body_1 += struct.pack(">i", -1)
                 continue
 
+            self._logger.debug(f"Need to convert {type(obb)} into oid {oid}")
             try:
                 converter = self.converters[oid]
             except KeyError:
                 raise ValueError(f"Missing converter for {oid}, can't convert {obb}") from None
+            self._logger.debug(f"Got converter: {converter}")
 
             converted = converter.to_postgres(self._conversion_context, obb)
             encoded = converted.encode(self.encoding)
@@ -1061,7 +1080,7 @@ class SansIOClient(object):
 
             code = self._buffer[0]
             size = int.from_bytes(self._buffer[1:5], byteorder="big") - 4
-            message_data = self._buffer[5: size + 5]
+            message_data = self._buffer[5 : size + 5]
 
             if len(message_data) < size:
                 self._logger.debug(
@@ -1078,7 +1097,7 @@ class SansIOClient(object):
             else:
                 # yes enough data, set the buffer to the data after the size bytes for future
                 # processing
-                self._buffer = self._buffer[size + 5:]
+                self._buffer = self._buffer[size + 5 :]
 
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")
@@ -1127,7 +1146,7 @@ class SansIOClient(object):
             self._logger.debug("Received cleartext password authentication request.")
 
             code = FrontendMessageCode.PASSWORD
-            packet_body += self._password.encode(encoding="utf-8")
+            packet_body += self._password.encode(encoding="ascii")
             self.state = ProtocolState.CLEARTEXT_SENT
 
         elif self.state == ProtocolState.MD5_STARTUP:
