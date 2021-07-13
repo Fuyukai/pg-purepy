@@ -44,4 +44,3 @@ async def test_converter_bytea():
         ba = (await conn.fetch(r"select $1::bytea;", b"\x00\x01"))[0]
         assert isinstance(ba.data[0], bytes)
         assert ba.data[0] == b"\x00\x01"
-

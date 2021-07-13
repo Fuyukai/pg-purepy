@@ -262,6 +262,13 @@ class BindComplete(PostgresMessage):
     """
 
 
+@attr.s(slots=True, frozen=True)
+class PortalSuspended(PostgresMessage):
+    """
+    Returned when the execution portal is suspended.
+    """
+
+
 def _optional_int(value: Optional[str]) -> Optional[int]:
     if value is None:
         return None
@@ -381,4 +388,5 @@ __all__ = (
     "RecoverableDatabaseError",
     "UnrecoverableDatabaseError",
     "ColumnDescription",
+    "PortalSuspended",
 )

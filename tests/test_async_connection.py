@@ -352,3 +352,16 @@ async def test_insert_into_not_null():
             await conn.execute("insert into test(id) values (:n);", n=None)
 
         assert e.value.response.code == "23502"
+
+
+async def test_max_rows():
+    """
+    Tests limiting the row count.
+    """
+
+    async with open_connection() as conn:
+        await conn.execute("create temp table test (id int primary key);")
+        await conn.execute("insert into test(id) values (1), (2), (3);")
+        fetched = await conn.fetch("select * from test;", max_rows=1)
+        assert len(fetched) == 1
+        assert fetched[0].data[0] == 1

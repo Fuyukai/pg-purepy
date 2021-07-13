@@ -38,7 +38,7 @@ from pg_purepy.messages import (
     ParameterDescription,
     BindComplete,
     SASLContinue,
-    SASLComplete,
+    SASLComplete, PortalSuspended,
 )
 from pg_purepy.conversion import apply_default_converters
 from pg_purepy.util import pack_strings, Buffer
@@ -842,10 +842,17 @@ class SansIOClient(object):
             self.state = ProtocolState.RECOVERABLE_ERROR
             return self._decode_error_response(body, recoverable=True, notice=False)
 
+        elif code == BackendMessageCode.PORTAL_SUSPENDED:
+            self.state = ProtocolState.MULTI_QUERY_RECEIVED_PORTAL_SUSPENDED
+            return PortalSuspended()
+
         raise UnknownMessageError(f"Expected DataRow or CommandComplete, got {code!r}")
 
+    # The docs seem to lie here, the server just sends us the PortalSuspended then
+    # ReadyForQuery. I don't get it.
+    # pg8000 seems to just drop it on the floor too... so that's what we do.
+    _handle_during_MULTI_QUERY_RECEIVED_PORTAL_SUSPENDED = _handle_ready_for_query
     _handle_during_MULTI_QUERY_RECEIVED_COMMAND_COMPLETE = _handle_ready_for_query
-
     _handle_during_RECOVERABLE_ERROR = _handle_ready_for_query
 
     ## Public API ##
@@ -1070,7 +1077,6 @@ class SansIOClient(object):
             remaining = self._current_packet_remaining
             assert remaining > 0, "partial packet needs actual data to read"
             data, self._buffer = self._buffer[0:remaining], self._buffer[remaining:]
-            self._logger.debug(f"Partial packet: {data} / {self._buffer}")
             self._current_packet_buffer += data
 
             self._current_packet_remaining -= len(data)
@@ -1107,6 +1113,9 @@ class SansIOClient(object):
                 # processing
                 self._buffer = self._buffer[size + 5 :]
 
+        code = BackendMessageCode(code)
+        self._logger.debug(f"Got incoming message {code!r}")
+
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")
         except AttributeError:
@@ -1115,7 +1124,6 @@ class SansIOClient(object):
         if isinstance(method, str):
             raise IllegalStateError(method)
 
-        code = BackendMessageCode(code)
         buffer = Buffer(message_data)
 
         # These messages can happen at any state.

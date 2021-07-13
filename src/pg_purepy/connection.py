@@ -224,6 +224,7 @@ class AsyncPostgresConnection(object):
         self,
         query: Union[str, PreparedStatementInfo],
         *params,
+        max_rows: int = None,
         **kwargs,
     ) -> AsyncIterator[QueryResultMessage]:
         """
@@ -236,7 +237,13 @@ class AsyncPostgresConnection(object):
             if not self._protocol.ready:
                 await self.wait_until_ready()
 
-            simple_query = not ((params or kwargs) or isinstance(query, PreparedStatementInfo))
+            simple_query = all(
+                (
+                    not (params or kwargs),
+                    not isinstance(query, PreparedStatementInfo),
+                    max_rows is None,
+                )
+            )
             if simple_query:
                 data = self._protocol.do_simple_query(query)
                 await self._write(data)
@@ -248,7 +255,7 @@ class AsyncPostgresConnection(object):
                 else:
                     info = query
 
-                bound_data = self._protocol.do_bind_execute(info, params)
+                bound_data = self._protocol.do_bind_execute(info, params, max_rows)
                 await self._write(bound_data)
                 # we need to get BindComplete because we need to yield the statement's
                 # RowDescription out, for a more "consistent" view.
@@ -271,6 +278,7 @@ class AsyncPostgresConnection(object):
         self,
         query: Union[str, PreparedStatementInfo],
         *params,
+        max_rows: int = None,
         **kwargs,
     ) -> AsyncContextManager[QueryResult]:
         """
@@ -291,8 +299,13 @@ class AsyncPostgresConnection(object):
         This is an asynchronous context manager that yields a :class:`.QueryResult`, that can
         be asynchronously iterated over for the data rows of the query. Once all data rows have
         been iterated over, you can call :func:`.QueryResult.row_count` to get the total row count.
+
+        If ``max_rows`` is specified, then the query will only return up to that many rows.
+        Otherwise, an unlimited amount may potentially be returned.
         """
-        async with aclosing(self.lowlevel_query(query, *params, **kwargs)) as agen:
+        async with aclosing(
+            self.lowlevel_query(query, *params, max_rows=max_rows, **kwargs)
+        ) as agen:
             yield QueryResult(agen.__aiter__())
             # always wait
             await self.wait_until_ready()
@@ -314,7 +327,7 @@ class AsyncPostgresConnection(object):
 
     ### DBAPI style methods ###
     async def fetch(
-        self, query: Union[str, PreparedStatementInfo], *params, **kwargs
+        self, query: Union[str, PreparedStatementInfo], *params, max_rows: int = None, **kwargs
     ) -> List[DataRow]:
         """
         Eagerly fetches the result of a query. This returns a list of :class:`~.DataRow` objects.
@@ -324,18 +337,26 @@ class AsyncPostgresConnection(object):
 
         :param query: Either a :class:`str` that contains the query text,
                       or a :class:`~.PreparedStatementInfo` that represents a pre-prepared query.
+        :param params: The positional arguments for the query.
+        :param max_rows: The maximum rows to return.
+        :param kwargs: The colon arguments for the query.
         """
-        async with self.query(query, *params, **kwargs) as q:
+        async with self.query(query, *params, max_rows=max_rows, **kwargs) as q:
             return [i async for i in q]
 
-    async def execute(self, query: Union[str, PreparedStatementInfo], *params, **kwargs) -> int:
+    async def execute(
+        self, query: Union[str, PreparedStatementInfo], *params, max_rows: int = None, **kwargs
+    ) -> int:
         """
         Executes a query, returning its row count. This will discard all data rows.
 
         :param query: Either a :class:`str` that contains the query text,
-              or a :class:`~.PreparedStatementInfo` that represents a pre-prepared query.
+                      or a :class:`~.PreparedStatementInfo` that represents a pre-prepared query.
+        :param params: The positional arguments for the query.
+        :param max_rows: The maximum rows to return.
+        :param kwargs: The colon arguments for the query.
         """
-        async with self.query(query, *params, **kwargs) as q:
+        async with self.query(query, *params, max_rows=max_rows, **kwargs) as q:
             return await q.row_count()
 
 
