@@ -17,7 +17,7 @@ Creation
 The primary class for the low-level client is :class:`~.pg_purepy.protocol.SansIOClient`.
 
 .. autoclass:: pg_purepy.SansIOClient
-    :members: __init__
+    :members: __init__, encoding, timezone, dead
 
 Doing... Stuff
 --------------
@@ -226,9 +226,8 @@ and no further actions will work.
 Internal State
 ~~~~~~~~~~~~~~
 
-The client object exposes a number of useful read-only properties.
-
-.. autoattribute:: pg_purepy.SansIOClient.encoding
+The client object exposes the current state of the protocol state machine using
+:attr:`.SansIOClient.state`.
 
 .. autoattribute:: pg_purepy.SansIOClient.state
 
@@ -236,6 +235,5 @@ The client object exposes a number of useful read-only properties.
     :members:
     :undoc-members:
 
-.. autoattribute:: pg_purepy.SansIOClient.dead
 
 .. _sans-IO: https://sans-io.readthedocs.io/

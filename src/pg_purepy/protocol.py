@@ -10,8 +10,10 @@ import struct
 from hashlib import md5
 from itertools import count as it_count
 from typing import Union, Optional, Callable, Dict, Any, List, TYPE_CHECKING
+from datetime import timezone, tzinfo
 
 import attr
+import dateutil.tz
 from pg_purepy.exc import (
     MissingPasswordError,
     ProtocolParseError,
@@ -249,6 +251,9 @@ class ConversionContext:
     #: The encoding of the client.
     client_encoding: str = attr.ib()
 
+    #: The timezone of the server.
+    timezone: tzinfo = attr.ib(default=timezone.utc)
+
 
 # noinspection PyMethodMayBeStatic
 class SansIOClient(object):
@@ -382,6 +387,13 @@ class SansIOClient(object):
         return self._conversion_context.client_encoding
 
     @property
+    def timezone(self) -> tzinfo:
+        """
+        The server timezone.
+        """
+        return self._conversion_context.timezone
+
+    @property
     def has_pending_data(self) -> bool:
         """
         Checks if this has pending data within the buffer.
@@ -415,6 +427,8 @@ class SansIOClient(object):
 
         if name == "client_encoding":
             self._conversion_context.client_encoding = value
+        elif name == "TimeZone":
+            self._conversion_context.timezone = dateutil.tz.gettz(value)
         else:
             self.connection_params[name] = value
 

@@ -21,12 +21,8 @@ In order to get anywhere, you need to actually connect to the server.
     :async-with: conn
 
 .. autoclass:: pg_purepy.AsyncPostgresConnection
+    :members: ready, in_transaction, dead, connection_parameters, server_timezone
 
-    .. autoattribute:: pg_purepy.AsyncPostgresConnection.ready
-
-    .. autoattribute:: pg_purepy.AsyncPostgresConnection.in_transaction
-
-    .. autoattribute:: pg_purepy.AsyncPostgresConnection.dead
 
 Querying
 --------

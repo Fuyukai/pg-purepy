@@ -8,6 +8,7 @@ import logging
 import types
 import warnings
 from contextlib import asynccontextmanager
+from datetime import tzinfo
 from os import PathLike
 from ssl import SSLContext
 from typing import (
@@ -112,6 +113,13 @@ class AsyncPostgresConnection(object):
         Returns a read-only view of the current connection;
         """
         return types.MappingProxyType(self._protocol.connection_params)
+
+    @property
+    def server_timezone(self) -> tzinfo:
+        """
+        Returns the timezone of the server.
+        """
+        return self._protocol.timezone
 
     def __repr__(self):
         return f"<{type(self).__name__} pid='{self._pid!r}'>"
