@@ -51,6 +51,8 @@ autodoc_default_options = {
     "show-inheritance": None,
 }
 
+nitpicky = True
+
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for

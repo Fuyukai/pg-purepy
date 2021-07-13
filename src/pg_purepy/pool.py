@@ -244,8 +244,9 @@ async def open_pool(
     """
     Opens a new connection pool to a PostgreSQL server. This is an asynchronous context manager.
 
-    This takes the same arguments and keyworrd arguments as :meth:`.open_database_connection`,
-    except for the optional ``connection_count`` parameter.
+    This takes the same arguments and keyworrd arguments as
+    :meth:`pg_purepy.connection.open_database_connection`, except for the optional
+    ``connection_count`` parameter.
 
     :param connection_count: The ideal number of connections to keep open at any one time. The
                              pool may shrink slightly as connections are closed due to network

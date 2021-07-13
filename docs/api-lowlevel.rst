@@ -14,7 +14,7 @@ connection.
 Creation
 --------
 
-The primary class for the low-level client is :class:`~.pg_purepy.protocol.SansIOClient`.
+The primary class for the low-level client is :class:`~.SansIOClient`.
 
 .. autoclass:: pg_purepy.SansIOClient
     :members: __init__, encoding, timezone, dead
@@ -44,8 +44,9 @@ a deadlock because the server will have nothing to send and you'll wait forever 
 Second, you need to check if there are any incoming messages from the server. This is done by
 calling :meth:`.SansIOClient.next_event` in an inner ``while True`` loop until it returns the
 special ``NO_DATA`` constant sentinel value. You should also do error handling wrt to
-:class:`.ErrorResponse` messages, if so desired. If this inner loop returns :class:`.ReadyForQuery`,
-then you have finished the whole loop and should break out of both the inner and outer loops.
+:class:`.ErrorOrNoticeResponse` messages, if so desired. If this inner loop returns
+:class:`.ReadyForQuery`, then you have finished the whole loop and should break out of both the
+inner and outer loops.
 
 .. code-block:: python3
 
@@ -79,7 +80,7 @@ may occur during authentication for example.
 
 Finally, you need to read incoming data from the server, and feed it into the protocol machine for
 later processing. This data won't actually be processed until you call
-:meth:`~SansIOClient.next_event` in the next iteration of the loop.
+:meth:`~.SansIOClient.next_event` in the next iteration of the loop.
 
 .. code-block:: python3
 

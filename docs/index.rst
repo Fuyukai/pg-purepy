@@ -15,7 +15,7 @@ it is written in pure-Python (no C dependencies), and exports three APIs:
 2. An mid-level asynchronous anyio API, based on singular connections, that handles the protocol
    parsing and networking for you.
 
-2. A low-level sans-IO API, which only does protocol parsing and has no niceness but is ideal for
+3. A low-level sans-IO API, which only does protocol parsing and has no niceness but is ideal for
    writing your own client.
 
 Requirements

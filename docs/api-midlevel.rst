@@ -17,10 +17,10 @@ Connecting
 
 In order to get anywhere, you need to actually connect to the server.
 
-.. autofunction:: pg_purepy.open_database_connection
+.. autofunction:: pg_purepy.connection.open_database_connection
     :async-with: conn
 
-.. autoclass:: pg_purepy.AsyncPostgresConnection
+.. autoclass:: pg_purepy.connection.AsyncPostgresConnection
     :members: ready, in_transaction, dead, connection_parameters, server_timezone
 
 
@@ -49,9 +49,9 @@ Whilst ``pg-purepy`` doesn't export a DBAPI 2.0 API as such, there are two high-
 that resemble DBAPI. These two functions are likely the two most useful functions when querying,
 but they are both *eager* functions and load the entire returned dataset into memory at once.
 
-.. automethod:: pg_purepy.AsyncPostgresConnection.fetch
+.. automethod:: pg_purepy.connection.AsyncPostgresConnection.fetch
 
-.. automethod:: pg_purepy.AsyncPostgresConnection.execute
+.. automethod:: pg_purepy.connection.AsyncPostgresConnection.execute
 
 For example, to insert some data, check how many rows were inserted, and verify it with a select:
 
@@ -73,10 +73,10 @@ Querying, Lazily
 ----------------
 
 If you have large data sets, or want to query lazily for other reasons, then
-:func:`~.AsyncPostgresConnection.query` can be used. This function is an asynchronous context
-manager, returning a :class:`~.QueryResult`.
+:func:`~pg_purepy.connection.AsyncPostgresConnection.query` can be used. This function is an
+asynchronous context manager, returning a :class:`~.QueryResult`.
 
-.. automethod:: pg_purepy.AsyncPostgresConnection.query
+.. automethod:: pg_purepy.connection.AsyncPostgresConnection.query
     :async-with: query
 
 .. autoclass:: pg_purepy.connection.QueryResult
@@ -138,9 +138,9 @@ Low-level querying
 ------------------
 
 If, for some reason, you need to access the messages returned during a query cycle, you can
-use the method :meth:`~.AsyncPostgresConnection.lowlevel_query`.
+use the method :meth:`~pg_purepy.connection.AsyncPostgresConnection.lowlevel_query`.
 
-.. automethod:: pg_purepy.AsyncPostgresConnection.lowlevel_query
+.. automethod:: pg_purepy.connection.AsyncPostgresConnection.lowlevel_query
 
 This function yields out the raw :class:`.PostgresMessage` objects that are received from the
 protocol, as well as handling any error responses.
@@ -162,8 +162,8 @@ protocol, as well as handling any error responses.
 
 For most queries, this function will yield the following sequence of messages, in this order:
 
-- Either a :class:`.RowDescription` instance, or a :class:`.NoData` instance.
-- Zero to N :class:`.RowData` instances
+- A :class:`.RowDescription` instance (that may be empty).
+- Zero to N :class:`.DataRow` instances
 - One :class:`.CommandComplete` instance.
 
 The last message will always be a :class:`.CommandComplete` instance.
@@ -171,21 +171,22 @@ The last message will always be a :class:`.CommandComplete` instance.
 Error handling
 --------------
 
-The underlying low-level client reports server-side errors as :class:`.ErrorResponse` instances, but
-the mid-level connection objects will turn these into proper exceptions in the query functions.
+The underlying low-level client reports server-side errors as :class:`.ErrorOrNoticeResponse`
+instances, but the mid-level connection objects will turn these into proper exceptions in the
+query functions.
 
-All exceptions raised from ErrorResponses inherit from :class:`.DatabaseError`.
+All exceptions raised from ErrorResponses inherit from :class:`.BaseDatabaseError`.
 
-.. autoexception:: pg_purepy.BaseDatabaseError
+.. autoexception:: pg_purepy.messages.BaseDatabaseError
 
 However, you shouldn't catch this exception as the client differentiates these into two subtypes -
 recoverable errors via :class:`.RecoverableDatabaseError`, and unrecoverable errors via
 :class:`.UnrecoverableDatabaseError`. A general rule is that you should *only* catch the recoverable
 variant.
 
-.. autoexception:: pg_purepy.RecoverableDatabaseError
+.. autoexception:: pg_purepy.messages.RecoverableDatabaseError
 
-.. autoexception:: pg_purepy.UnrecoverableDatabaseError
+.. autoexception:: pg_purepy.messages.UnrecoverableDatabaseError
 
 Transaction Helpers
 -------------------
@@ -194,7 +195,7 @@ The mid-level API does nothing with transactions by default, operating in autoco
 it does supply a transaction helper which will automatically commit at the end of the ``async with``
 block, or rollback if an error happens.
 
-.. automethod:: pg_purepy.AsyncPostgresConnection.with_transaction
+.. automethod:: pg_purepy.connection.AsyncPostgresConnection.with_transaction
     :async-with:
 
 .. warning::

@@ -64,7 +64,7 @@ T = TypeVar("T")
 class AsyncPostgresConnection(object):
     """
     An asynchronous connection to a PostgreSQL server. This class should not be directly
-    instantiated; instead, use :meth:`.open_database_connection`.
+    instantiated; instead, use :meth:`~pg_purepy.connection.open_database_connection`.
     """
 
     def __init__(

@@ -57,6 +57,9 @@ These classes relate to parts of the query cycle.
 
 **Both simple and extended queries**:
 
+.. autoclass:: pg_purepy.messages.ColumnDescription
+    :members:
+
 .. autoclass:: pg_purepy.messages.RowDescription
     :members:
 

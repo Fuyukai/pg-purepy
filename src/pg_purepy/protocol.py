@@ -1079,7 +1079,7 @@ class SansIOClient(object):
         """
         Reads the next event from the message queue.
 
-        :return: Either a :class:`.PostgresMessage`, or the special :data:`NEED_DATA` constant.
+        :return: Either a :class:`.PostgresMessage`, or the special ``NEED_DATA`` constant.
         """
         if (
             self.state == ProtocolState.UNRECOVERABLE_ERROR
