@@ -957,10 +957,13 @@ class SansIOClient(object):
         self.state = ProtocolState.MULTI_QUERY_SENT_PARSE_DESCRIBE
         return full_packet
 
-    def do_bind_execute(self, info: PreparedStatementInfo, params: Any):
+    def do_bind_execute(self, info: PreparedStatementInfo, params: Any, row_count: int = None):
         """
         Binds the specified ``params`` to the prepared statement specified by ``info``,
         then executes it.
+
+        If ``row_count`` is not None, then only that many rows will be returned at maximum.
+        Otherwise, an unlimited amount of rows will be returned.
         """
         wanted_params = len(info.parameter_oids.oids)
         if len(params) != wanted_params:
@@ -1020,7 +1023,12 @@ class SansIOClient(object):
         full_packet += packet_body_1
 
         ## Execute packet
-        packet_body_2 = b"\x00\x00\x00\x00\x00"  # Unnamed portal, no limit rows
+        ### Execute: Unnamed portal.
+        packet_body_2 = pack_strings()
+        row_count = row_count or 0
+
+        ### Execute: Row count.
+        packet_body_2 += struct.pack(">i", row_count)
 
         full_packet += FrontendMessageCode.EXECUTE.to_bytes(length=1, byteorder="big")
         full_packet += (len(packet_body_2) + 4).to_bytes(length=4, byteorder="big")
