@@ -102,6 +102,16 @@ async def test_query_after_error():
         assert row_2.data[0] == 2
 
 
+async def test_query_with_positional_params():
+    """
+    Tests running a query with positional parameters.
+    """
+    async with open_connection() as conn:
+        result = await conn.fetch("select $1::int4;", 7)
+        assert len(result) == 1
+        assert result[0].data[0] == 7
+
+
 async def test_query_with_params():
     """
     Tests running a query with parameters.
@@ -111,7 +121,6 @@ async def test_query_with_params():
 
         assert len(result) == 1
         row = result[0]
-        assert isinstance(row, DataRow)
         assert row.data[0] == 1
 
 
