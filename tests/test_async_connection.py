@@ -81,10 +81,7 @@ async def test_query_after_error():
 
         assert e1.value.response.code == "42P01"
 
-        result_1 = await conn.fetch("select 1;")
-        assert len(result_1) == 1
-
-        row_1 = result_1[0]
+        row_1 = await conn.fetch_one("select 1;")
         assert isinstance(row_1, DataRow)
         assert len(row_1.data) == 1
         assert row_1.data[0] == 1
@@ -94,10 +91,7 @@ async def test_query_after_error():
 
         assert e2.value.response.code == "42P01"
 
-        result_2 = await conn.fetch("select 2 where 'a' = :a;", a="a")
-        assert len(result_2) == 1
-
-        row_2 = result_2[0]
+        row_2 = await conn.fetch_one("select 2 where 'a' = :a;", a="a")
         assert isinstance(row_2, DataRow)
         assert len(row_2.data) == 1
         assert row_2.data[0] == 2
@@ -108,9 +102,8 @@ async def test_query_with_positional_params():
     Tests running a query with positional parameters.
     """
     async with open_connection() as conn:
-        result = await conn.fetch("select $1::int4;", 7)
-        assert len(result) == 1
-        assert result[0].data[0] == 7
+        result = await conn.fetch_one("select $1::int4;", 7)
+        assert result.data[0] == 7
 
 
 async def test_query_with_params():
@@ -118,10 +111,7 @@ async def test_query_with_params():
     Tests running a query with parameters.
     """
     async with open_connection() as conn:
-        result = await conn.fetch("select 1 where 'a' = :x;", x="a")
-
-        assert len(result) == 1
-        row = result[0]
+        row = await conn.fetch_one("select 1 where 'a' = :x;", x="a")
         assert row.data[0] == 1
 
 
@@ -174,12 +164,12 @@ async def test_transaction_helper_normal():
             )
 
         assert not conn.in_transaction
-        result = await conn.fetch(
+        result = await conn.fetch_one(
             "select count(*) from pg_tables where tablename = :name;",
             name="test_transaction_helper_normal",
         )
 
-        assert result[0].data[0] == 1
+        assert result.data[0] == 1
 
 
 async def test_transaction_helper_error():
@@ -196,12 +186,12 @@ async def test_transaction_helper_error():
                 raise ValueError()
 
         assert not conn.in_transaction
-        result = await conn.fetch(
+        result = await conn.fetch_one(
             "select count(*) from pg_tables where tablename = :name;",
             name="test_transaction_helper_error",
         )
 
-        assert result[0].data[0] == 0
+        assert result.data[0] == 0
 
 
 ## Prepared statements ##
@@ -226,9 +216,8 @@ async def test_execute_prepared_statement_insert():
         rows_params = await conn.execute(st_with_params, "two")
         assert rows_params == 1
 
-        count = await conn.fetch("select count(*) from test_epsi;")
-        assert len(count) == 1
-        assert count[0].data[0] == 2
+        count = await conn.fetch_one("select count(*) from test_epsi;")
+        assert count.data[0] == 2
 
         rows = await conn.fetch("select * from test_epsi;")
         assert len(rows) == 2
@@ -247,9 +236,8 @@ async def test_insert():
         )
         row_count = await conn.execute("insert into test_insert(foo) values (:one);", one="test")
         assert row_count == 1
-        result = await conn.fetch("select * from test_insert;")
-        assert len(result) == 1
-        assert result[0].data == [1, "test"]
+        result = await conn.fetch_one("select * from test_insert;")
+        assert result.data == [1, "test"]
 
 
 async def test_unparameterised_insert():
@@ -263,9 +251,8 @@ async def test_unparameterised_insert():
         )
         row_count = await conn.execute("insert into test_insert2(foo) values ('test');")
         assert row_count == 1
-        result = await conn.fetch("select * from test_insert2;")
-        assert len(result) == 1
-        assert result[0].data == [1, "test"]
+        result = await conn.fetch_one("select * from test_insert2;")
+        assert result.data == [1, "test"]
 
 
 async def test_update():
@@ -277,15 +264,13 @@ async def test_update():
             "create temp table test_update (id serial primary key, foo text not null);"
         )
         await conn.execute("insert into test_update(foo) values (:one);", one="test")
-        pre_update = await conn.fetch("select * from test_update;")
-        assert len(pre_update) == 1
-        assert pre_update[0].data == [1, "test"]
+        pre_update = await conn.fetch_one("select * from test_update;")
+        assert pre_update.data == [1, "test"]
 
         row_count = await conn.execute("update test_update set foo = :one;", one="test_2")
         assert row_count == 1
-        post_update = await conn.fetch("select * from test_update;")
-        assert len(post_update) == 1
-        assert post_update[0].data == [1, "test_2"]
+        post_update = await conn.fetch_one("select * from test_update;")
+        assert post_update.data == [1, "test_2"]
 
 
 async def test_delete():
@@ -337,8 +322,8 @@ async def test_set_parameter():
         assert "application_name" in conn.connection_parameters
         assert conn.connection_parameters["application_name"] == "test"
 
-        row = await conn.fetch("show application_name;")
-        assert row[0].data[0] == conn.connection_parameters["application_name"]
+        row = await conn.fetch_one("show application_name;")
+        assert row.data[0] == conn.connection_parameters["application_name"]
 
 
 async def test_set_illegal_parameter():

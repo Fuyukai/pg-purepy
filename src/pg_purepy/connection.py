@@ -21,7 +21,7 @@ from typing import (
     Tuple,
     Dict,
     MappingView,
-    Mapping,
+    Mapping, Optional,
 )
 
 import anyio
@@ -64,7 +64,7 @@ T = TypeVar("T")
 class AsyncPostgresConnection(object):
     """
     An asynchronous connection to a PostgreSQL server. This class should not be directly
-    instantiated; instead, use :meth:`~pg_purepy.connection.open_database_connection`.
+    instantiated; instead, use :func:`.open_database_connection`.
     """
 
     def __init__(
@@ -304,7 +304,7 @@ class AsyncPostgresConnection(object):
         Mid-level query API.
 
         The ``query`` parameter can either be a string or a :class:`~.PreparedStatementInfo`, as
-        returned from :func:`~.create_prepared_statement`. If it is a string, and it has parameters,
+        returned from :meth:`~.create_prepared_statement`. If it is a string, and it has parameters,
         they must be provided as keyword arguments. If it is a pre-prepared statement, and it has
         parameters, they must be provided as positional arguments.
 
@@ -317,7 +317,7 @@ class AsyncPostgresConnection(object):
 
         This is an asynchronous context manager that yields a :class:`.QueryResult`, that can
         be asynchronously iterated over for the data rows of the query. Once all data rows have
-        been iterated over, you can call :func:`.QueryResult.row_count` to get the total row count.
+        been iterated over, you can call :meth:`~.QueryResult.row_count` to get the total row count.
 
         If ``max_rows`` is specified, then the query will only return up to that many rows.
         Otherwise, an unlimited amount may potentially be returned.
@@ -362,6 +362,19 @@ class AsyncPostgresConnection(object):
         """
         async with self.query(query, *params, max_rows=max_rows, **kwargs) as q:
             return [i async for i in q]
+
+    async def fetch_one(
+        self, query: Union[str, PreparedStatementInfo], *params, **kwargs
+    ) -> Optional[DataRow]:
+        """
+        Like :meth:`.fetch`, but only fetches one row.
+        """
+        row = await self.fetch(query, *params, **kwargs)
+
+        try:
+            return row[0]
+        except IndexError:
+            return None
 
     async def execute(
         self, query: Union[str, PreparedStatementInfo], *params, max_rows: int = None, **kwargs

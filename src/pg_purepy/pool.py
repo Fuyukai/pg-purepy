@@ -5,7 +5,7 @@ import logging
 import os
 import warnings
 from contextlib import asynccontextmanager
-from typing import List, AsyncContextManager
+from typing import List, AsyncContextManager, Optional
 
 import anyio
 import attr
@@ -229,6 +229,14 @@ class PooledDatabaseInterface(object):
         async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
             return await conn.fetch(query, *params, **kwargs)
 
+    async def fetch_one(self, query: str, *params, **kwargs) -> Optional[DataRow]:
+        """
+        Like :meth:`.fetch`, but only returns one row. See
+        :meth:`.AsyncPostgresConnection.fetch_one` for more information.
+        """
+        async with self._checkout_connection() as conn:
+            return await conn.fetch_one(query, *params, **kwargs)
+
 
 def determine_conn_count():
     """
@@ -245,7 +253,7 @@ async def open_pool(
     Opens a new connection pool to a PostgreSQL server. This is an asynchronous context manager.
 
     This takes the same arguments and keyworrd arguments as
-    :meth:`pg_purepy.connection.open_database_connection`, except for the optional
+    :func:`.open_database_connection`, except for the optional
     ``connection_count`` parameter.
 
     :param connection_count: The ideal number of connections to keep open at any one time. The

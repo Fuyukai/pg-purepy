@@ -44,9 +44,11 @@ Querying
 
 The connection pool object has a similar high-level query API to the mid-level API.
 
+.. automethod:: pg_purepy.PooledDatabaseInterface.execute
+
 .. automethod:: pg_purepy.PooledDatabaseInterface.fetch
 
-.. automethod:: pg_purepy.PooledDatabaseInterface.execute
+.. automethod:: pg_purepy.PooledDatabaseInterface.fetch_one
 
 Transactions
 ------------

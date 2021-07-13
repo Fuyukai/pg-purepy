@@ -18,8 +18,8 @@ async def test_successful_pool_usage():
         async def execute(num: int):
             # the sleep ensures that the connections actually run in parallel, as trio will
             # schedule the tasks before that sleep expires.
-            result = await p.fetch(f"select pg_sleep(0.25), {num};")
-            results.add(result[0].data[1])
+            result = await p.fetch_one(f"select pg_sleep(0.25), {num};")
+            results.add(result.data[1])
 
         async with anyio.create_task_group() as nursery:
             for i in range(0, 3):

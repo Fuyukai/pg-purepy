@@ -45,13 +45,15 @@ finer control of the actual messages arriving.
 Querying, Eagerly
 -----------------
 
-Whilst ``pg-purepy`` doesn't export a DBAPI 2.0 API as such, there are two high-level functions
-that resemble DBAPI. These two functions are likely the two most useful functions when querying,
-but they are both *eager* functions and load the entire returned dataset into memory at once.
+Whilst ``pg-purepy`` doesn't export a DBAPI 2.0 API as such, there are three high-level functions
+that resemble DBAPI. These three functions are likely the most useful functions when querying,
+but they are all *eager* functions and load the entire returned dataset into memory at once.
 
 .. automethod:: pg_purepy.connection.AsyncPostgresConnection.fetch
 
 .. automethod:: pg_purepy.connection.AsyncPostgresConnection.execute
+
+.. automethod:: pg_purepy.connection.AsyncPostgresConnection.fetch_one
 
 For example, to insert some data, check how many rows were inserted, and verify it with a select:
 
@@ -60,8 +62,7 @@ For example, to insert some data, check how many rows were inserted, and verify 
     async with open_database_connection(...) as conn:
         inserted = await conn.execute("insert into some_table(...) values (...);")
         print(f"Inserted {inserted} rows")
-        select_count = await conn.fetch("select count(*) from some_table;")
-        row = select_count[0]
+        row = await conn.fetch_one("select count(*) from some_table;")
         assert row.data[0] == inserted
 
 .. warning::
