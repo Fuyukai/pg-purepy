@@ -1,8 +1,8 @@
 from enum import Enum
 
 import pytest
-from pg_purepy.conversion.enums import EnumConverter
 
+from pg_purepy.conversion.enums import EnumConverter
 from tests.util import open_connection
 
 pytestmark = pytest.mark.anyio

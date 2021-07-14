@@ -6,7 +6,7 @@ import datetime
 import arrow
 import dateutil.tz
 import pytest
-from dateutil.tz import gettz, UTC
+from dateutil.tz import UTC, gettz
 
 from tests.util import open_connection
 

@@ -5,11 +5,12 @@ import logging
 import os
 import warnings
 from contextlib import asynccontextmanager
-from typing import List, AsyncContextManager, Optional
+from typing import AsyncContextManager, List, Optional
 
 import anyio
 import attr
-from anyio.abc import TaskGroup, SocketStream
+from anyio.abc import SocketStream, TaskGroup
+
 from pg_purepy.connection import AsyncPostgresConnection, _open_connection
 from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransactionWarning
 from pg_purepy.messages import DataRow

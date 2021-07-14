@@ -7,16 +7,16 @@ from typing import TYPE_CHECKING
 
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.conversion.basics import (
-    SimpleFunctionConverter,
-    TextConverter,
     BoolConverter,
     ByteaConverter,
+    SimpleFunctionConverter,
+    TextConverter,
 )
 from pg_purepy.conversion.dt import (
-    STATIC_TIMESTAMPTZ_CONVERTER,
-    STATIC_TIMESTAMPNOTZ_CONVERTER,
     STATIC_DATE_CONVERTER,
     STATIC_TIME_CONVERTER,
+    STATIC_TIMESTAMPNOTZ_CONVERTER,
+    STATIC_TIMESTAMPTZ_CONVERTER,
 )
 
 if TYPE_CHECKING:

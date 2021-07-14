@@ -4,7 +4,6 @@ from typing import AsyncContextManager
 
 from pg_purepy import AsyncPostgresConnection, open_database_connection
 
-
 POSTGRES_ADDRESS = os.environ.get("POSTGRES_ADDRESS", "127.0.0.1")
 POSTGRES_USERNAME = os.environ.get("POSTGRES_USERNAME", "postgres")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "password")  # lol!

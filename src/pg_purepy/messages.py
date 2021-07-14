@@ -4,9 +4,10 @@ import abc
 import enum
 import logging
 from io import StringIO
-from typing import Optional, List, Any
+from typing import Any, List, Optional
 
 import attr
+
 from pg_purepy.exc import PostgresqlError
 
 logging.basicConfig(level=logging.DEBUG)
@@ -389,4 +390,5 @@ __all__ = (
     "UnrecoverableDatabaseError",
     "ColumnDescription",
     "PortalSuspended",
+    "wrap_error"
 )

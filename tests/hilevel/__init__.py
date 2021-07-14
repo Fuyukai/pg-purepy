@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 from typing import AsyncContextManager
 
-from pg_purepy.pool import PooledDatabaseInterface, open_pool as _open_pool
-
-from tests.util import POSTGRES_ADDRESS, POSTGRES_USERNAME, POSTGRES_PASSWORD
+from pg_purepy.pool import PooledDatabaseInterface
+from pg_purepy.pool import open_pool as _open_pool
+from tests.util import POSTGRES_ADDRESS, POSTGRES_PASSWORD, POSTGRES_USERNAME
 
 
 @asynccontextmanager

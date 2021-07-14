@@ -4,6 +4,7 @@ import datetime
 from typing import TYPE_CHECKING
 
 import arrow
+
 from pg_purepy.conversion.abc import Converter
 
 if TYPE_CHECKING:

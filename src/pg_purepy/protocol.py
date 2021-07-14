@@ -10,42 +10,43 @@ import struct
 from datetime import timezone, tzinfo
 from hashlib import md5
 from itertools import count as it_count
-from typing import Union, Optional, Callable, Dict, Any, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 import attr
 import dateutil.tz
+from scramp import ScramClient
+
 from pg_purepy.conversion import apply_default_converters
 from pg_purepy.exc import (
+    IllegalStateError,
     MissingPasswordError,
     ProtocolParseError,
     UnknownMessageError,
-    IllegalStateError,
 )
 from pg_purepy.messages import (
-    AuthenticationRequest,
-    ParameterStatus,
-    ErrorResponseFieldType,
-    ErrorOrNoticeResponse,
     AuthenticationCompleted,
     AuthenticationMethod,
-    ReadyForQueryState,
-    ReadyForQuery,
-    PostgresMessage,
-    CommandComplete,
-    RowDescription,
-    ColumnDescription,
-    DataRow,
+    AuthenticationRequest,
     BackendKeyData,
-    ParseComplete,
-    PreparedStatementInfo,
-    ParameterDescription,
     BindComplete,
-    SASLContinue,
-    SASLComplete,
+    ColumnDescription,
+    CommandComplete,
+    DataRow,
+    ErrorOrNoticeResponse,
+    ErrorResponseFieldType,
+    ParameterDescription,
+    ParameterStatus,
+    ParseComplete,
     PortalSuspended,
+    PostgresMessage,
+    PreparedStatementInfo,
+    ReadyForQuery,
+    ReadyForQueryState,
+    RowDescription,
+    SASLComplete,
+    SASLContinue,
 )
-from pg_purepy.util import pack_strings, Buffer
-from scramp import ScramClient
+from pg_purepy.util import Buffer, pack_strings
 
 if TYPE_CHECKING:
     from pg_purepy.conversion.abc import Converter

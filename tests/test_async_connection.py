@@ -1,18 +1,18 @@
 import pytest
 import trio.testing
 from async_generator import aclosing
-from pg_purepy import (
-    MissingPasswordError,
-    InvalidPasswordError,
-    RowDescription,
-    DataRow,
-    CommandComplete,
-    RecoverableDatabaseError,
-    ProtocolParseError,
-)
-from pg_purepy.connection import open_database_connection, QueryResult
 
-from tests.util import open_connection, POSTGRES_ADDRESS, POSTGRES_USERNAME
+from pg_purepy import (
+    CommandComplete,
+    DataRow,
+    InvalidPasswordError,
+    MissingPasswordError,
+    ProtocolParseError,
+    RecoverableDatabaseError,
+    RowDescription,
+)
+from pg_purepy.connection import QueryResult, open_database_connection
+from tests.util import POSTGRES_ADDRESS, POSTGRES_USERNAME, open_connection
 
 pytestmark = pytest.mark.anyio
 

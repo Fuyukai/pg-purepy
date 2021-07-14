@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Type, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Type
 
 from pg_purepy.conversion.abc import Converter
 

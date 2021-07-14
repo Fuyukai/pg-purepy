@@ -12,43 +12,44 @@ from datetime import tzinfo
 from os import PathLike
 from ssl import SSLContext
 from typing import (
-    Union,
     AsyncContextManager,
     AsyncIterator,
-    TypeVar,
-    Type,
     List,
-    Tuple,
     Mapping,
     Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
 )
 
 import anyio
-from anyio import Lock, EndOfStream
+from anyio import EndOfStream, Lock
 from anyio.abc import ByteStream, SocketStream
 from anyio.streams.tls import TLSStream
+
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.dbapi import convert_paramstyle
 from pg_purepy.exc import IllegalStateError
 from pg_purepy.messages import (
-    ErrorOrNoticeResponse,
-    wrap_error,
-    QueryResultMessage,
-    PreparedStatementInfo,
+    BackendKeyData,
     BaseDatabaseError,
     BindComplete,
-    PostgresMessage,
-    DataRow,
     CommandComplete,
-    BackendKeyData,
+    DataRow,
+    ErrorOrNoticeResponse,
+    PostgresMessage,
+    PreparedStatementInfo,
+    QueryResultMessage,
+    wrap_error,
 )
 from pg_purepy.protocol import (
-    SansIOClient,
-    SSL_MESSAGE,
-    check_if_tls_accepted,
-    ProtocolParseError,
     NEED_DATA,
+    SSL_MESSAGE,
+    ProtocolParseError,
     ReadyForQuery,
+    SansIOClient,
+    check_if_tls_accepted,
 )
 
 try:

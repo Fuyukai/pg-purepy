@@ -1,4 +1,9 @@
-from pg_purepy.protocol import SansIOClient, NEED_DATA, AuthenticationCompleted, ParameterStatus
+from pg_purepy.protocol import (
+    NEED_DATA,
+    AuthenticationCompleted,
+    ParameterStatus,
+    SansIOClient,
+)
 
 
 def test_tricky_packet_truncation():
