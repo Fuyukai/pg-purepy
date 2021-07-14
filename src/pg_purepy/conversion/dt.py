@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import arrow
 
@@ -18,12 +18,18 @@ class TimestampTzConverter(Converter):
 
     oid = 1184
 
-    def from_postgres(self, context: ConversionContext, data: str) -> arrow.Arrow:
+    def from_postgres(self, context: ConversionContext, data: str) -> Union[arrow.Arrow, str]:
+        if data == "infinity" or data == "-infinity":
+            return data
+
         # TIMESTAMPTZ are stored in UTC, and are converted to the server's timezone on retrieval.
         # So we provide the returned date in the server's timezone.
         return arrow.get(data, tzinfo=context.timezone)
 
-    def to_postgres(self, context: ConversionContext, data: arrow.Arrow) -> str:
+    def to_postgres(self, context: ConversionContext, data: Union[str, arrow.Arrow]) -> str:
+        if data == "infinity" or data == "-infinity":
+            return data
+
         # postgres just straight up accepts RFC 3339 format, even if it doesn't produce it.
         # This will coincidentally work with vanilla datetimes, because `isoformat` is a method
         # on both.
@@ -40,7 +46,10 @@ class TimestampNoTzConverter(Converter):
 
     oid = 1114
 
-    def from_postgres(self, context: ConversionContext, data: str) -> arrow.Arrow:
+    def from_postgres(self, context: ConversionContext, data: str) -> Union[arrow.Arrow, str]:
+        if data == "infinity" or data == "-infinity":
+            return data
+
         return arrow.get(data)  # No timezone!
 
     def to_postgres(self, context: ConversionContext, data: arrow.Arrow) -> str:

@@ -63,3 +63,15 @@ async def test_time_converter():
         await conn.execute("insert into test_tc values (:time);", time=rn)
         result = await conn.fetch_one("select * from test_tc;")
         assert result.data[0] == rn
+
+
+async def test_dt_infinity():
+    """
+    Tests using infinity in datetimes.
+    """
+    async with open_connection() as conn:
+        await conn.execute("create temp table test_dti_in (dt timestamptz);")
+        await conn.execute("insert into test_dti_in(dt) values (:inf);", inf="infinity")
+
+        result = await conn.fetch_one("select * from test_dti_in;")
+        assert result.data[0] == "infinity"

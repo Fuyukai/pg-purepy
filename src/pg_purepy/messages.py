@@ -390,5 +390,5 @@ __all__ = (
     "UnrecoverableDatabaseError",
     "ColumnDescription",
     "PortalSuspended",
-    "wrap_error"
+    "wrap_error",
 )
