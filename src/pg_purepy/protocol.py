@@ -888,7 +888,7 @@ class SansIOClient(object):
     ## Public API ##
     def add_converter(self, converter: Converter):
         """
-        Adds a new converter to this protocol.
+        Adds a new :class:`.Converter` to this protocol.
         """
         self.converters[converter.oid] = converter
 

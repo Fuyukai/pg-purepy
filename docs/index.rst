@@ -42,3 +42,4 @@ Requirements
    api-lowlevel.rst
    api-midlevel.rst
    api-highlevel.rst
+   conversion.rst

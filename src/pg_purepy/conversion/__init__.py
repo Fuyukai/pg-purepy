@@ -18,6 +18,7 @@ from pg_purepy.conversion.dt import (
     STATIC_TIMESTAMPNOTZ_CONVERTER,
     STATIC_TIMESTAMPTZ_CONVERTER,
 )
+from pg_purepy.conversion.enums import EnumConverter
 
 if TYPE_CHECKING:
     from pg_purepy.protocol import SansIOClient
