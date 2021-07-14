@@ -11,6 +11,12 @@ from pg_purepy.conversion.basics import (
     BoolConverter,
     ByteaConverter,
 )
+from pg_purepy.conversion.dt import (
+    STATIC_TIMESTAMPTZ_CONVERTER,
+    STATIC_TIMESTAMPNOTZ_CONVERTER,
+    STATIC_DATE_CONVERTER,
+    STATIC_TIME_CONVERTER,
+)
 
 if TYPE_CHECKING:
     from pg_purepy.protocol import SansIOClient
@@ -40,3 +46,9 @@ def apply_default_converters(protocol: SansIOClient):
 
     protocol.add_converter(STATIC_BOOLEAN_CONVERTER)
     protocol.add_converter(STATIC_BYTES_CONVERTER)
+
+    # datetime converters
+    protocol.add_converter(STATIC_TIMESTAMPTZ_CONVERTER)
+    protocol.add_converter(STATIC_TIMESTAMPNOTZ_CONVERTER)
+    protocol.add_converter(STATIC_DATE_CONVERTER)
+    protocol.add_converter(STATIC_TIME_CONVERTER)

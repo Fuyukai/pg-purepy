@@ -428,7 +428,12 @@ class SansIOClient(object):
         if name == "client_encoding":
             self._conversion_context.client_encoding = value
         elif name == "TimeZone":
-            self._conversion_context.timezone = dateutil.tz.gettz(value)
+            gotten = dateutil.tz.gettz(value)
+            # coerce 'UTC' zoneinfo into tzutc
+            if gotten == dateutil.tz.gettz("UTC"):
+                gotten = dateutil.tz.UTC
+
+            self._conversion_context.timezone = gotten
         else:
             self.connection_params[name] = value
 
