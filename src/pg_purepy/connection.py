@@ -27,6 +27,7 @@ import anyio
 from anyio import Lock, EndOfStream
 from anyio.abc import ByteStream, SocketStream
 from anyio.streams.tls import TLSStream
+from pg_purepy.conversion.abc import Converter
 from pg_purepy.dbapi import convert_paramstyle
 from pg_purepy.exc import IllegalStateError
 from pg_purepy.messages import (
@@ -119,6 +120,12 @@ class AsyncPostgresConnection(object):
         Returns the timezone of the server.
         """
         return self._protocol.timezone
+
+    def add_converter(self, converter: Converter):
+        """
+        Registers a :class:`.Converter` with this connection.
+        """
+        self._protocol.add_converter(converter)
 
     def __repr__(self):
         return f"<{type(self).__name__} pid='{self._pid!r}'>"
