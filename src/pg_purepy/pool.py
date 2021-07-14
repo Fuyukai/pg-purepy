@@ -11,6 +11,7 @@ import anyio
 import attr
 from anyio.abc import SocketStream, TaskGroup
 
+from pg_purepy import ArrayConverter
 from pg_purepy.connection import AsyncPostgresConnection, _open_connection
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransactionWarning
@@ -41,7 +42,7 @@ class PooledDatabaseInterface(object):
         self._conn_kwargs = conn_kwargs
 
         # list of converters used when opening a new connection
-        self._converters = []
+        self._converters = set()
 
         # used to add new converters. non-queue.
         self._raw_connections: Set[AsyncPostgresConnection] = set()
@@ -267,10 +268,26 @@ class PooledDatabaseInterface(object):
         """
         Registers a converter for all the connections on this pool.
         """
-        self._converters.append(converter)
+        self._converters.add(converter)
 
         for conn in self._raw_connections:
             conn.add_converter(converter)
+
+    async def add_converter_with_array(self, converter: Converter, **kwargs):
+        """
+        Registers a converter, and adds the array type converter to it too.
+        """
+        self.add_converter(converter)
+
+        async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
+            row = await conn.fetch_one(
+                "select typarray::oid from pg_type where oid = :oid", oid=converter.oid
+            )
+            if row is None:
+                return
+
+            arrcv = ArrayConverter(oid=row[0], subconverter=converter, **kwargs)
+            self.add_converter(arrcv)
 
 
 def determine_conn_count():

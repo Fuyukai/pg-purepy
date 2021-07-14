@@ -66,3 +66,18 @@ checks out a connection for exclusive usage in a transaction block.
 
 The transaction will be automatically committed or rolled back as appropriate at the end of the
 ``async with`` block, and the connection will not be reused until the checkout is done.
+
+.. _hilevel-converters:
+
+Converters
+----------
+
+You can add converters like the other two APIs using :meth:`.PooledDatabaseInterface.add_converter`.
+This will add it to all open connections, as well as any future connections that may be opened.
+
+.. automethod:: pg_purepy.PooledDatabaseInterface.add_converter
+
+If you wish to automatically add the array converter for converting PostgreSQL arrays of a custom
+type that is converted, use :meth:`.PooledDatabaseInterface.add_converter_with_array`.
+
+.. automethod:: pg_purepy.PooledDatabaseInterface.add_converter_with_array

@@ -45,3 +45,25 @@ async def test_adding_converter():
         assert e.value.response.code == "57P01"
         row_2 = await pool.fetch_one("select 'two'::test_ace_t;")
         assert row_2[0] == TestEnum.TWO
+
+
+async def test_adding_converter_and_array():
+    """
+    Tests adding a converter and its array converter at the same time.
+    """
+    async with open_pool(conn_count=1) as pool:
+        await pool.execute("drop type if exists test_acaa;")
+        await pool.execute("create type test_acaa as enum ('one', 'two', 'three');")
+
+        oid_row = await pool.fetch_one("select oid from pg_type where typname = 'test_acaa';")
+        oid = oid_row.data[0]
+        converter = EnumConverter(oid, TestEnum)
+        pool.add_converter(converter)
+
+        result_1 = await pool.fetch_one("select '{\"one\"}'::test_acaa[];")
+        assert result_1[0] == "{one}"
+
+        # safe, this uses a set and will just overwrite the old converter cleanly.
+        await pool.add_converter_with_array(converter)
+        result_2 = await pool.fetch_one("select '{\"one\"}'::test_acaa[];")
+        assert result_2[0] == [TestEnum.ONE]

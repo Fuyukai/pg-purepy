@@ -81,4 +81,4 @@ Then, you can register converters with a method depending on your API.
 
 .. automethod:: pg_purepy.protocol.SansIOClient.add_converter
 
-The high-level API has its own API for converters.
+The high-level API has its own API for converters. See :ref:`hilevel-converters`.
