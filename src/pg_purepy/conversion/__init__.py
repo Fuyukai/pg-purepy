@@ -29,7 +29,8 @@ INT_CONVERTERS = [SimpleFunctionConverter(oid, int, str) for oid in KNOWN_INT_OI
 KNOWN_TEXT_OIDS = (18, 19, 25)
 STR_CONVERTERS = [TextConverter(oid) for oid in KNOWN_TEXT_OIDS]
 
-KNOWN_FLOAT_OIDS = []
+KNOWN_FLOAT_OIDS = (700, 701)
+FLOAT_CONVERTERS = [SimpleFunctionConverter(oid, float, str) for oid in KNOWN_FLOAT_OIDS]
 
 STATIC_BOOLEAN_CONVERTER = BoolConverter()
 STATIC_BYTES_CONVERTER = ByteaConverter()
@@ -44,6 +45,9 @@ def apply_default_converters(protocol: SansIOClient):
 
     for cvs in STR_CONVERTERS:
         protocol.add_converter(cvs)
+
+    for cvf in FLOAT_CONVERTERS:
+        protocol.add_converter(cvf)
 
     protocol.add_converter(STATIC_BOOLEAN_CONVERTER)
     protocol.add_converter(STATIC_BYTES_CONVERTER)
