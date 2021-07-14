@@ -2,7 +2,7 @@ import anyio
 import pytest
 from pg_purepy import UnrecoverableDatabaseError, ConnectionInTransactionWarning
 
-from tests.util import open_pool
+from tests.hilevel import open_pool
 
 pytestmark = pytest.mark.anyio
 

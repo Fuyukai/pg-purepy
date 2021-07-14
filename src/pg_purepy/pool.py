@@ -236,6 +236,21 @@ class PooledDatabaseInterface(object):
         async with self._checkout_connection() as conn:
             return await conn.fetch_one(query, *params, **kwargs)
 
+    ## Utility Methods ##
+    async def find_oid_for_type(self, type_name: str) -> Optional[int]:
+        """
+        Finds the OID for the type with the specified name.
+        """
+        row = await self.fetch_one(
+            "select oid from pg_type where typname = :name",
+            name=type_name
+        )
+
+        if row is None:
+            return None
+        
+        return row.data[0]
+
 
 def determine_conn_count():
     """
