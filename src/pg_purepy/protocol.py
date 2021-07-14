@@ -13,7 +13,10 @@ from itertools import count as it_count
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 import dateutil.tz
+from scramp import ScramClient
+
 from pg_purepy.conversion import apply_default_converters
+from pg_purepy.conversion.abc import ConversionContext, Converter
 from pg_purepy.exc import (
     IllegalStateError,
     MissingPasswordError,
@@ -44,10 +47,6 @@ from pg_purepy.messages import (
     SASLContinue,
 )
 from pg_purepy.util import Buffer, pack_strings
-from scramp import ScramClient
-
-if TYPE_CHECKING:
-    from pg_purepy.conversion.abc import Converter, ConversionContext
 
 # static messages with no params
 FLUSH_MESSAGE = b"H\x00\x00\x00\x04"

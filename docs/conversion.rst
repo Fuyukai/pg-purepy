@@ -48,6 +48,18 @@ You can add support for your own custom enumeration types using :class:`.EnumCon
 .. autoclass:: pg_purepy.conversion.EnumConverter
     :members: __init__
 
+Array Types
+~~~~~~~~~~~
+
+All built-in types have an array converter included, that will turn lists or tuples (or other
+ordered sequences) into PostgreSQL arrays.
+
+If you want to convert your own types to/from arrays, you need to register a separate array
+converter.
+
+.. autoclass:: pg_purepy.conversion.ArrayConverter
+    :members: __init__
+
 Custom Converters
 -----------------
 

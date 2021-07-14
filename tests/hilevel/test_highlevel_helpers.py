@@ -1,17 +1,17 @@
 from enum import Enum
 
 import pytest
-from pg_purepy import EnumConverter, UnrecoverableDatabaseError
 
+from pg_purepy import EnumConverter, UnrecoverableDatabaseError
 from tests.hilevel import open_pool
 
 pytestmark = pytest.mark.anyio
 
 
 class TestEnum(Enum):
-    ONE = 'one'
-    TWO = 'two'
-    THREE = 'three'
+    ONE = "one"
+    TWO = "two"
+    THREE = "three"
 
 
 async def test_get_type_oid():

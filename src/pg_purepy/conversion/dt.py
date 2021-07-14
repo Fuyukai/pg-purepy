@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Union
 import arrow
 
 from pg_purepy.conversion.abc import Converter
+from pg_purepy.conversion.arrays import ArrayConverter
 
 if TYPE_CHECKING:
     from pg_purepy.protocol import ConversionContext
@@ -37,6 +38,7 @@ class TimestampTzConverter(Converter):
 
 
 STATIC_TIMESTAMPTZ_CONVERTER = TimestampTzConverter()
+STATIC_TIMESTAMPTZA_CONVERTER = ArrayConverter(118, STATIC_TIMESTAMPTZ_CONVERTER)
 
 
 class TimestampNoTzConverter(Converter):
@@ -67,6 +69,7 @@ class TimestampNoTzConverter(Converter):
 
 
 STATIC_TIMESTAMPNOTZ_CONVERTER = TimestampNoTzConverter()
+STATIC_TIMESTAMPNOTZA_CONVERTER = ArrayConverter(1115, STATIC_TIMESTAMPNOTZ_CONVERTER)
 
 
 class DateConverter(Converter):
@@ -84,6 +87,7 @@ class DateConverter(Converter):
 
 
 STATIC_DATE_CONVERTER = DateConverter()
+STATIC_DATEA_CONVERTER = ArrayConverter(1182, STATIC_DATE_CONVERTER)
 
 
 class TimeConverter(Converter):
@@ -101,3 +105,4 @@ class TimeConverter(Converter):
 
 
 STATIC_TIME_CONVERTER = TimeConverter()
+STATIC_TIMEA_CONVERTER = ArrayConverter(1183, STATIC_TIME_CONVERTER)

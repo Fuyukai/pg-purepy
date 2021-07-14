@@ -12,9 +12,9 @@ import attr
 from anyio.abc import SocketStream, TaskGroup
 
 from pg_purepy.connection import AsyncPostgresConnection, _open_connection
+from pg_purepy.conversion.abc import Converter
 from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransactionWarning
 from pg_purepy.messages import DataRow
-from pg_purepy.conversion.abc import Converter
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class PooledDatabaseInterface(object):
         return self._read.statistics().tasks_waiting_receive
 
     async def _open_new_connection(self, *args, **kwargs):
-        sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)#
+        sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)  #
         self._raw_connections.add(conn)
         for converter in self._converters:
             conn.add_converter(converter=converter)
@@ -268,7 +268,7 @@ class PooledDatabaseInterface(object):
         Registers a converter for all the connections on this pool.
         """
         self._converters.append(converter)
-        
+
         for conn in self._raw_connections:
             conn.add_converter(converter)
 

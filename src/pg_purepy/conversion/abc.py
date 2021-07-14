@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import abc
 from datetime import tzinfo
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import attr
 from dateutil.tz import UTC
-
-if TYPE_CHECKING:
-    from pg_purepy.protocol import ConversionContext
 
 
 class Converter(metaclass=abc.ABCMeta):
