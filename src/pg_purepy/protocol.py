@@ -7,13 +7,14 @@ import enum
 import functools
 import logging
 import struct
+from datetime import timezone, tzinfo
 from hashlib import md5
 from itertools import count as it_count
 from typing import Union, Optional, Callable, Dict, Any, List, TYPE_CHECKING
-from datetime import timezone, tzinfo
 
 import attr
 import dateutil.tz
+from pg_purepy.conversion import apply_default_converters
 from pg_purepy.exc import (
     MissingPasswordError,
     ProtocolParseError,
@@ -43,7 +44,6 @@ from pg_purepy.messages import (
     SASLComplete,
     PortalSuspended,
 )
-from pg_purepy.conversion import apply_default_converters
 from pg_purepy.util import pack_strings, Buffer
 from scramp import ScramClient
 

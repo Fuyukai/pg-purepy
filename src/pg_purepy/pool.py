@@ -14,7 +14,6 @@ from pg_purepy.connection import AsyncPostgresConnection, _open_connection
 from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransactionWarning
 from pg_purepy.messages import DataRow
 
-
 logger = logging.getLogger(__name__)
 
 

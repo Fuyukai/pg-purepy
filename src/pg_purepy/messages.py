@@ -7,7 +7,7 @@ from io import StringIO
 from typing import Optional, List, Any
 
 import attr
-from pg_purepy.exc import ProtocolParseError, PostgresqlError
+from pg_purepy.exc import PostgresqlError
 
 logging.basicConfig(level=logging.DEBUG)
 
