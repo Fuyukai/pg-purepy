@@ -5,7 +5,7 @@ import logging
 import os
 import warnings
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager, List, Optional
+from typing import AsyncContextManager, List, Optional, Set
 
 import anyio
 import attr
@@ -14,6 +14,7 @@ from anyio.abc import SocketStream, TaskGroup
 from pg_purepy.connection import AsyncPostgresConnection, _open_connection
 from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransactionWarning
 from pg_purepy.messages import DataRow
+from pg_purepy.conversion.abc import Converter
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,12 @@ class PooledDatabaseInterface(object):
 
         self._conn_args = conn_args
         self._conn_kwargs = conn_kwargs
+
+        # list of converters used when opening a new connection
+        self._converters = []
+
+        # used to add new converters. non-queue.
+        self._raw_connections: Set[AsyncPostgresConnection] = set()
 
         self._nursery = nursery
         logger.debug(f"Opening {count} connections to the database.")
@@ -68,11 +75,17 @@ class PooledDatabaseInterface(object):
         return self._read.statistics().tasks_waiting_receive
 
     async def _open_new_connection(self, *args, **kwargs):
-        sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)
+        sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)#
+        self._raw_connections.add(conn)
+        for converter in self._converters:
+            conn.add_converter(converter=converter)
+
         wrapped = OpenedConnection(sock, conn)
+
         try:
             self._write.send_nowait(wrapped)  # noqa
         except anyio.WouldBlock:
+            self._raw_connections.remove(conn)
             raise RuntimeError(
                 "Asked to create a new connection, but there's already too many "
                 "connections in the queue!"
@@ -190,6 +203,7 @@ class PooledDatabaseInterface(object):
                 )
                 with anyio.CancelScope(shield=True):
                     try:
+                        self._raw_connections.remove(checkout.conn)
                         await checkout.sock.aclose()
                     finally:
                         self._nursery.start_soon(self._open_new_connection)
@@ -248,6 +262,15 @@ class PooledDatabaseInterface(object):
             return None
 
         return row.data[0]
+
+    def add_converter(self, converter: Converter):
+        """
+        Registers a converter for all the connections on this pool.
+        """
+        self._converters.append(converter)
+        
+        for conn in self._raw_connections:
+            conn.add_converter(converter)
 
 
 def determine_conn_count():
