@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.7.1 (Unreleased)
+0.7.1 (2021-07-14)
 ------------------
 
  - Add :attr:`.AsyncPostgresConnection.dead` for if a connection error occurs or the underlying
