@@ -203,6 +203,9 @@ class DataRow(QueryResultMessage):
     #: converted data incoming from the server.
     data: List[Any] = attr.ib()
 
+    def __getitem__(self, item):  # pragma: no cover
+        return self.data[item]
+
 
 @attr.s(slots=True, frozen=True)
 class CommandComplete(QueryResultMessage):
