@@ -1042,6 +1042,8 @@ class SansIOClient(object):
             self._logger.debug(f"Got converter: {converter}")
 
             converted = converter.to_postgres(self._conversion_context, obb)
+            assert isinstance(converted, str), f"Converter returned {type(obb)}, not string!"
+
             encoded = converted.encode(self.encoding)
             packet_body_1 += struct.pack(">i", len(encoded))
             packet_body_1 += encoded

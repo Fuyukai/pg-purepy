@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pg_purepy.conversion.abc import Converter
 from pg_purepy.conversion.basics import (
     SimpleFunctionConverter,
     TextConverter,
@@ -20,7 +21,6 @@ from pg_purepy.conversion.dt import (
 
 if TYPE_CHECKING:
     from pg_purepy.protocol import SansIOClient
-
 
 KNOWN_INT_OIDS = (20, 21, 23, 26, 27, 28, 29)
 INT_CONVERTERS = [SimpleFunctionConverter(oid, int, str) for oid in KNOWN_INT_OIDS]
@@ -52,3 +52,10 @@ def apply_default_converters(protocol: SansIOClient):
     protocol.add_converter(STATIC_TIMESTAMPNOTZ_CONVERTER)
     protocol.add_converter(STATIC_DATE_CONVERTER)
     protocol.add_converter(STATIC_TIME_CONVERTER)
+
+
+__all__ = (
+    "Converter",
+    "apply_default_converters",
+    "EnumConverter"
+)
