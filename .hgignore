@@ -15,3 +15,7 @@ docs/_build/*
 
 # nothing to see here :)
 aaaa.py
+
+.coverage
+htmlcov/
+dist/
