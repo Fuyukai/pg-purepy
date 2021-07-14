@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import abc
+from datetime import tzinfo
 from typing import TYPE_CHECKING, Any
+
+import attr
+from dateutil.tz import UTC
 
 if TYPE_CHECKING:
     from pg_purepy.protocol import ConversionContext
@@ -34,3 +38,17 @@ class Converter(metaclass=abc.ABCMeta):
         :param data: The Python object that needs to be converted.
         :return: The string data that will be used in a query string.
         """
+
+
+@attr.s(slots=True, frozen=False)
+class ConversionContext:
+    """
+    A conversion context contains information that might be needed to convert from the PostgreSQL
+    string representation to the real representation.
+    """
+
+    #: The encoding of the client.
+    client_encoding: str = attr.ib()
+
+    #: The timezone of the server.
+    timezone: tzinfo = attr.ib(default=UTC)

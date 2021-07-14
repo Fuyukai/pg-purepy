@@ -7,15 +7,12 @@ import enum
 import functools
 import logging
 import struct
-from datetime import timezone, tzinfo
+from datetime import tzinfo
 from hashlib import md5
 from itertools import count as it_count
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
-import attr
 import dateutil.tz
-from scramp import ScramClient
-
 from pg_purepy.conversion import apply_default_converters
 from pg_purepy.exc import (
     IllegalStateError,
@@ -47,9 +44,10 @@ from pg_purepy.messages import (
     SASLContinue,
 )
 from pg_purepy.util import Buffer, pack_strings
+from scramp import ScramClient
 
 if TYPE_CHECKING:
-    from pg_purepy.conversion.abc import Converter
+    from pg_purepy.conversion.abc import Converter, ConversionContext
 
 # static messages with no params
 FLUSH_MESSAGE = b"H\x00\x00\x00\x04"
@@ -240,20 +238,6 @@ class ProtocolState(enum.Enum):
 
     #: The connection has been terminated.
     TERMINATED = 9999
-
-
-@attr.s(slots=True, frozen=False)
-class ConversionContext:
-    """
-    A conversion context contains information that might be needed to convert from the PostgreSQL
-    string representation to the real representation.
-    """
-
-    #: The encoding of the client.
-    client_encoding: str = attr.ib()
-
-    #: The timezone of the server.
-    timezone: tzinfo = attr.ib(default=timezone.utc)
 
 
 # noinspection PyMethodMayBeStatic

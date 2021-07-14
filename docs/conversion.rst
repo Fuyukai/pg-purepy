@@ -60,7 +60,7 @@ If you need to convert a type that isn't supported by default, you can create a 
 The conversion context is passed to conversion functions, and contains attributes that may be
 useful for your conversion.
 
-.. autoclass:: pg_purepy.protocol.ConversionContext
+.. autoclass:: pg_purepy.conversion.abc.ConversionContext
     :members:
 
 Then, you can register converters with a method depending on your API.
