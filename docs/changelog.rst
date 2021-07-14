@@ -13,6 +13,23 @@ Changelog
    number of rows for a query at the protocol level, at the cost of always using the extended query
    syntax.
 
+ - Rework converters.
+
+  - Add date/time converters.
+
+  - Add converters for :class:`enum.Enum` instances.
+
+  - Add array conversion support.
+
+ - :class:`.DataRow` now supports ``__getitem__`` syntax.
+
+ - Add an API that allows getting type OIDs from type names on the high-level API.
+
+ - Export :attr:`.SansIOClient.timezone` and :attr:`.AsyncPostgresConnection.server_timezone`.
+
+ - Protect certain server parameters from being set. The datetime converters need these to
+   function properly.
+
 0.7.0
 -----
 
