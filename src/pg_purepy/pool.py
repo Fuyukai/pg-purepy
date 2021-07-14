@@ -241,14 +241,11 @@ class PooledDatabaseInterface(object):
         """
         Finds the OID for the type with the specified name.
         """
-        row = await self.fetch_one(
-            "select oid from pg_type where typname = :name",
-            name=type_name
-        )
+        row = await self.fetch_one("select oid from pg_type where typname = :name", name=type_name)
 
         if row is None:
             return None
-        
+
         return row.data[0]
 
 

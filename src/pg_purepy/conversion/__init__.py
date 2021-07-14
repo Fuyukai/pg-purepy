@@ -54,8 +54,4 @@ def apply_default_converters(protocol: SansIOClient):
     protocol.add_converter(STATIC_TIME_CONVERTER)
 
 
-__all__ = (
-    "Converter",
-    "apply_default_converters",
-    "EnumConverter"
-)
+__all__ = ("Converter", "apply_default_converters", "EnumConverter")

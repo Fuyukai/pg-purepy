@@ -15,7 +15,10 @@ class EnumConverter(Converter):
     """
 
     def __init__(
-        self, oid: int, enum_klass: Type[Enum], *,
+        self,
+        oid: int,
+        enum_klass: Type[Enum],
+        *,
         use_member_values: bool = False,
         lowercase_names: bool = True,
     ):

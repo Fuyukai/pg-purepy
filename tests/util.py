@@ -16,5 +16,3 @@ async def open_connection() -> AsyncContextManager[AsyncPostgresConnection]:
         address_or_path=POSTGRES_ADDRESS, username=POSTGRES_USERNAME, password=POSTGRES_PASSWORD
     ) as conn:
         yield conn
-
-

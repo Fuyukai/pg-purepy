@@ -15,9 +15,9 @@ class StandardEnum(Enum):
 
 
 class StringEnum(str, Enum):
-    THREE = 'one'
-    ONE = 'two'
-    TWO = 'three'
+    THREE = "one"
+    ONE = "two"
+    TWO = "three"
 
 
 async def test_basic_enum_conversion():
