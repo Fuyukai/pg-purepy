@@ -278,7 +278,7 @@ class SansIOClient(object):
                                      raises an exception.
         """
         if not logger_name:
-            logger_name = __name__ + f":protocol-{next(self._LOGGER_COUNTER)}"
+            logger_name = __name__ + f".protocol-{next(self._LOGGER_COUNTER)}"
 
         if database is None:
             database = username
