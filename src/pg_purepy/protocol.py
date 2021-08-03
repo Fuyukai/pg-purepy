@@ -927,7 +927,6 @@ class SansIOClient(object):
         if self._state != ProtocolState.READY_FOR_QUERY:
             raise IllegalStateError("The server is not ready for queries")
 
-        self._logger.debug(f"Sending static query {query_text}")
         packet_body = pack_strings(query_text, encoding=self.encoding)
         header = FrontendMessageCode.QUERY.to_bytes(length=1, byteorder="big")
         header += (len(packet_body) + 4).to_bytes(length=4, byteorder="big")
