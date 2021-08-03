@@ -270,6 +270,8 @@ class AsyncPostgresConnection(object):
                     max_rows is None,
                 )
             )
+
+            logger.debug(f"EXECUTE:\n{query}")
             if simple_query:
                 data = self._protocol.do_simple_query(query)
                 await self._write(data)
