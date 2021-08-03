@@ -1,6 +1,13 @@
 Changelog
 =========
 
+0.7.2 (2021-08-03)
+------------------
+
+ - Add :meth:`.DataRow.to_dict` to turn a data row into a dictionary of values.
+
+ - Less log spam.
+
 0.7.1 (2021-07-14)
 ------------------
 

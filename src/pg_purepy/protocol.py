@@ -1018,12 +1018,10 @@ class SansIOClient(object):
                 packet_body_1 += struct.pack(">i", -1)
                 continue
 
-            self._logger.debug(f"Need to convert {type(obb)} into oid {oid}")
             try:
                 converter = self.converters[oid]
             except KeyError:
                 raise ValueError(f"Missing converter for {oid}, can't convert {obb}") from None
-            self._logger.debug(f"Got converter: {converter}")
 
             converted = converter.to_postgres(self._conversion_context, obb)
             assert isinstance(converted, str), f"Converter returned {type(obb)}, not string!"
@@ -1158,7 +1156,6 @@ class SansIOClient(object):
         if result is None:
             raise Exception(f"{method.__qualname__} returned None! This is a bug!")
 
-        self._logger.debug(f"Got message object: {result}")
         return result
 
     def get_needed_synchronisation(self) -> bytes:

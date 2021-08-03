@@ -4,7 +4,7 @@ import abc
 import enum
 import logging
 from io import StringIO
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict, Tuple
 
 import attr
 
@@ -205,6 +205,17 @@ class DataRow(QueryResultMessage):
 
     def __getitem__(self, item):  # pragma: no cover
         return self.data[item]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Converts this data row to a dict. If multiple columns have the same name, this may not
+        end up the way you expect.
+        """
+        d = {}
+        for col, data in zip(self.description.columns, self.data):
+            d[col.name] = data
+
+        return d
 
 
 @attr.s(slots=True, frozen=True)
