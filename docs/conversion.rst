@@ -60,6 +60,16 @@ converter.
 .. autoclass:: pg_purepy.conversion.ArrayConverter
     :members: __init__
 
+``hstore``
+~~~~~~~~~~
+
+The postgresql key-value type (known as ``hstore``) can be added as a converter.
+
+.. code-block:: python3
+
+    async with ... as pool:
+        await pool.add_converter_using(get_hstore_converter)
+
 Custom Converters
 -----------------
 

@@ -5,7 +5,7 @@ import logging
 import os
 import warnings
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager, List, Optional, Set
+from typing import AsyncContextManager, Awaitable, Callable, List, Optional, Set
 
 import anyio
 import attr
@@ -272,6 +272,19 @@ class PooledDatabaseInterface(object):
 
         for conn in self._raw_connections:
             conn.add_converter(converter)
+
+    async def add_converter_using(
+        self, fn: Callable[[AsyncPostgresConnection], Awaitable[Optional[Converter]]]
+    ):
+        """
+        Adds a converter using the specified async function. Useful primarily for extension types
+        where the oids aren't fixed.
+        """
+        async with self._checkout_connection() as conn:
+            converter = await fn(conn)
+
+        if converter is not None:
+            self.add_converter(converter)
 
     async def add_converter_with_array(self, converter: Converter, **kwargs):
         """

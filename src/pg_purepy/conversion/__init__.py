@@ -25,6 +25,7 @@ from pg_purepy.conversion.dt import (
     STATIC_TIMESTAMPTZA_CONVERTER,
 )
 from pg_purepy.conversion.enums import EnumConverter
+from pg_purepy.conversion.hstore import HStoreConverter
 
 if TYPE_CHECKING:
     from pg_purepy.protocol import SansIOClient

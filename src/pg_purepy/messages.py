@@ -4,7 +4,7 @@ import abc
 import enum
 import logging
 from io import StringIO
-from typing import Any, List, Optional, Dict, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import attr
 
@@ -309,6 +309,7 @@ class ErrorOrNoticeResponse(PostgresMessage):
     message: str = attr.ib()
 
     # optional parameters
+    hint: str = attr.ib(default=None)
     detail: Optional[str] = attr.ib(default=None)
     position: Optional[int] = attr.ib(default=None, converter=_optional_int)
     internal_position: Optional[int] = attr.ib(default=None, converter=_optional_int)
