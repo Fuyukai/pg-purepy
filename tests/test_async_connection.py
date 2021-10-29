@@ -12,7 +12,7 @@ from pg_purepy import (
     RowDescription,
 )
 from pg_purepy.connection import QueryResult, open_database_connection
-from tests.util import POSTGRES_ADDRESS, POSTGRES_USERNAME, open_connection
+from tests.util import POSTGRES_ADDRESS, POSTGRES_USERNAME, open_connection, POSTGRES_PASSWORD
 
 pytestmark = pytest.mark.anyio
 
@@ -25,6 +25,7 @@ async def test_basic_connection():
         assert conn.ready
 
 
+@pytest.mark.skipif(not POSTGRES_PASSWORD, reason="no password provided")
 async def test_connection_with_invalid_password():
     """
     Tests opening a connection with an invalid password.
@@ -36,6 +37,7 @@ async def test_connection_with_invalid_password():
             pass
 
 
+@pytest.mark.skipif(not POSTGRES_PASSWORD, reason="no password provided")
 async def test_needs_password():
     """
     Tests opening a connection where a password is needed, but none is provided.
