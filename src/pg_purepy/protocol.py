@@ -239,7 +239,7 @@ class ProtocolState(enum.Enum):
     TERMINATED = 9999
 
 
-# noinspection PyMethodMayBeStatic
+# noinspection PyMethodMayBeStatic,PyUnresolvedReferences
 class SansIOClient(object):
     """
     Sans-I/O state machine for the PostgreSQL C<->S protocol. This operates as an in-memory buffer
@@ -353,7 +353,7 @@ class SansIOClient(object):
     @state.setter
     def state(self, value: ProtocolState):
         before = self._state
-        self._logger.debug(f"Protocol changing state from {before} to {value}")
+        self._logger.trace(f"Protocol changing state from {before} to {value}")
         self._state = value
 
     @property
@@ -421,7 +421,7 @@ class SansIOClient(object):
         else:
             self.connection_params[name] = value
 
-        self._logger.debug(f"Parameter status: {name} -> {value}")
+        self._logger.trace(f"Parameter status: {name} -> {value}")
 
         return ParameterStatus(name, value)
 
@@ -469,7 +469,7 @@ class SansIOClient(object):
         Decodes the row description message.
         """
         field_count = body.read_short()
-        self._logger.debug(f"Got {field_count} fields in this row description.")
+        self._logger.trace(f"Got {field_count} fields in this row description.")
         fields = []
 
         for i in range(0, field_count):
@@ -685,7 +685,7 @@ class SansIOClient(object):
         """
         row_desc = self._decode_row_description(body)
         self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_ROW_DESCRIPTION
-        self._logger.debug(f"Incoming data has {len(row_desc.columns)} columns.")
+        self._logger.trace(f"Incoming data has {len(row_desc.columns)} columns.")
         self._last_row_description = row_desc
         return row_desc
 
@@ -697,7 +697,7 @@ class SansIOClient(object):
             # commands such as Begin or Rollback don't return rows, thus don't return a
             # RowDescription.
             self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE
-            self._logger.debug("Query returned no rows")
+            self._logger.trace("Query returned no rows")
             return self._decode_command_complete(body)
 
         elif code == BackendMessageCode.ROW_DESCRIPTION:
@@ -887,7 +887,7 @@ class SansIOClient(object):
         assert self._state != ProtocolState.UNRECOVERABLE_ERROR, "state is unrecoverable error"
         assert self._state != ProtocolState.TERMINATED, "state is terminated"
 
-        self._logger.debug(f"Protocol: Received {len(data)} bytes")
+        self._logger.trace(f"Protocol: Received {len(data)} bytes")
         self._buffer += data
 
     def do_startup(self) -> bytes:
@@ -899,7 +899,6 @@ class SansIOClient(object):
         if self._state != ProtocolState.STARTUP:
             raise IllegalStateError("Can't do startup outside of the startup state")
 
-        self._logger.debug("Sending startup message...")
         packet_body = struct.pack("!i", (self.PROTOCOL_MAJOR << 16) | self.PROTOCOL_MINOR)
         packet_body += pack_strings("user", self.username)
         packet_body += pack_strings("database", self.database)
@@ -1075,7 +1074,7 @@ class SansIOClient(object):
         ):
             raise IllegalStateError("The protocol is broken and won't work.")
 
-        self._logger.debug(f"Called next_event(), state is {self.state.name}")
+        self._logger.trace(f"Called next_event(), state is {self.state.name}")
 
         if len(self._buffer) == 0:
             return NEED_DATA
@@ -1111,8 +1110,8 @@ class SansIOClient(object):
             message_data = self._buffer[5 : size + 5]
 
             if len(message_data) < size:
-                self._logger.debug(
-                    f"Received truncated packet of {len(message_data)} size, " f"need {size} bytes"
+                self._logger.trace(
+                    f"Received truncated packet of {len(message_data)} size, need {size} bytes"
                 )
                 # not enough data yet.
                 self._processing_partial_packet = True
@@ -1128,7 +1127,7 @@ class SansIOClient(object):
                 self._buffer = self._buffer[size + 5 :]
 
         code = BackendMessageCode(code)
-        self._logger.debug(f"Got incoming message {code!r}")
+        self._logger.trace(f"Got incoming message {code!r}")
 
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")
@@ -1172,7 +1171,7 @@ class SansIOClient(object):
         ## Authentication States ##
         if self.state == ProtocolState.CLEARTEXT_STARTUP:
             self._check_password()
-            self._logger.debug("Received cleartext password authentication request.")
+            self._logger.trace("Received cleartext password authentication request.")
 
             code = FrontendMessageCode.PASSWORD
             packet_body += self._password.encode(encoding="ascii")

@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.7.4 (2021-10-29)
+------------------
+
+ - Add ``TRACE`` log level, used for protocol messages.
+
 0.7.3 (2021-10-27)
 ------------------
 

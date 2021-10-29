@@ -41,7 +41,7 @@ docs = ["Sphinx", "sphinxcontrib-trio", "sphinx-autodoc-typehints", "sphinx-rtd-
     "sphinx-inline-tabs"]
 
 [tool.pytest.ini_options]
-log_cli_level = "debug"
+log_cli_level = "5"
 log_cli = true
 addopts = "--cov --cov-report=html"
 
