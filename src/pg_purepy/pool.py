@@ -176,7 +176,7 @@ class PooledDatabaseInterface(object):
         logger.debug("Checking out new connection from the pool...")
         checkout = await self._read.receive()
         logger.debug(
-            f"Connection acquired, current unused pool size: "
+            "Connection acquired, current unused pool size: "
             f"{self._read.statistics().current_buffer_used}"
         )
 
@@ -184,23 +184,23 @@ class PooledDatabaseInterface(object):
             warnings.warn(
                 f"Connection {checkout.conn} still has a transaction open. Forcing rollback."
             )
-            await checkout.conn.execute("ROLLBACK;")
+            await checkout.conn._safely_rollback(None)
 
         try:
             yield checkout.conn
             if checkout.conn.in_transaction:
                 warn = ConnectionInTransactionWarning(
                     f"Connection {checkout.conn} is being checked back in with a transaction open. "
-                    f"Forcing rollback."
+                    "Forcing rollback."
                 )
                 warnings.warn(warn, stacklevel=3)
-                await checkout.conn.execute("ROLLBACK;")
+                await checkout.conn._safely_rollback(None)
 
         finally:
             if checkout.conn.dead:
                 logger.warning(
                     f"Connection {checkout.conn} is dead for some reason, scheduling "
-                    f"creation of a new connection"
+                    "creation of a new connection"
                 )
                 with anyio.CancelScope(shield=True):
                     try:

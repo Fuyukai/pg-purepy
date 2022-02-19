@@ -1,5 +1,7 @@
+import anyio
 import pytest
 import trio.testing
+from anyio.lowlevel import checkpoint
 from async_generator import aclosing
 
 from pg_purepy import (
@@ -12,7 +14,12 @@ from pg_purepy import (
     RowDescription,
 )
 from pg_purepy.connection import QueryResult, open_database_connection
-from tests.util import POSTGRES_ADDRESS, POSTGRES_USERNAME, open_connection, POSTGRES_PASSWORD
+from tests.util import (
+    POSTGRES_ADDRESS,
+    POSTGRES_PASSWORD,
+    POSTGRES_USERNAME,
+    open_connection,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -21,6 +28,7 @@ async def test_basic_connection():
     """
     Tests opening a basic connection to the PostgreSQL server.
     """
+
     async with open_connection() as conn:
         assert conn.ready
 
@@ -30,6 +38,7 @@ async def test_connection_with_invalid_password():
     """
     Tests opening a connection with an invalid password.
     """
+
     with pytest.raises(InvalidPasswordError):
         async with open_database_connection(
             address_or_path=POSTGRES_ADDRESS, username=POSTGRES_USERNAME, password=""
@@ -42,6 +51,7 @@ async def test_needs_password():
     """
     Tests opening a connection where a password is needed, but none is provided.
     """
+
     with pytest.raises(MissingPasswordError):
         async with open_database_connection(
             address_or_path=POSTGRES_ADDRESS,
@@ -54,6 +64,7 @@ async def test_basic_select():
     """
     Tests a basic SELECT statement.
     """
+
     async with open_connection() as conn:
         # fun fact: select null; returns text.
         result = [i async for i in conn.lowlevel_query("select null;")]
@@ -76,6 +87,7 @@ async def test_query_after_error():
     """
     Tests running a second query after a first query raises an error.
     """
+
     async with open_connection() as conn:
         # simple queries
         with pytest.raises(RecoverableDatabaseError) as e1:
@@ -103,6 +115,7 @@ async def test_query_with_positional_params():
     """
     Tests running a query with positional parameters.
     """
+
     async with open_connection() as conn:
         result = await conn.fetch_one("select $1::int4;", 7)
         assert result.data[0] == 7
@@ -112,6 +125,7 @@ async def test_query_with_params():
     """
     Tests running a query with parameters.
     """
+
     async with open_connection() as conn:
         row = await conn.fetch_one("select 1 where 'a' = :x;", x="a")
         assert row.data[0] == 1
@@ -121,6 +135,7 @@ async def test_get_row_count_no_rowcount():
     """
     Tests getting the row count of a command that doesn't return a row count.
     """
+
     async with open_connection() as conn:
         row_count = await conn.execute("checkpoint;")
         assert row_count == 0
@@ -130,6 +145,7 @@ async def test_multiple_queries_one_execute():
     """
     Tests executing multiple queries in one execute.
     """
+
     async with open_connection() as conn:
         async with aclosing(conn.lowlevel_query("select 1; select 2;")) as agen:
             results = [i async for i in agen]
@@ -158,6 +174,7 @@ async def test_transaction_helper_normal():
     """
     Tests the transaction helper in a normal situation.
     """
+
     async with open_connection() as conn:
         async with conn.with_transaction():
             assert conn.in_transaction
@@ -178,6 +195,7 @@ async def test_transaction_helper_error():
     """
     Tests the transaction helper in an error situation.
     """
+
     async with open_connection() as conn:
         with pytest.raises(ValueError):
             async with conn.with_transaction():
@@ -201,6 +219,7 @@ async def test_execute_prepared_statement_insert():
     """
     Tests executing a prepared statement with parameters.
     """
+
     async with open_connection() as conn:
         await conn.execute(
             "create temp table test_epsi (id serial primary key, foo text not null);"
@@ -232,6 +251,7 @@ async def test_insert():
     """
     Tests inserting data into a table.
     """
+
     async with open_connection() as conn:
         await conn.execute(
             "create temp table test_insert (id serial primary key, foo text not null);"
@@ -261,6 +281,7 @@ async def test_update():
     """
     Tests updating data in a table.
     """
+
     async with open_connection() as conn:
         await conn.execute(
             "create temp table test_update (id serial primary key, foo text not null);"
@@ -279,6 +300,7 @@ async def test_delete():
     """
     Tests deleting data in a table.
     """
+
     async with open_connection() as conn:
         await conn.execute(
             "create temp table test_delete (id serial primary key, foo text not null);"
@@ -300,6 +322,7 @@ async def test_notices():
     """
     Tests handling notices in the stream.
     """
+
     async with open_connection() as conn:
         with pytest.warns(UserWarning):
             await conn.execute(
@@ -343,6 +366,7 @@ async def test_get_cached_row_count(anyio_backend):
     """
     Tests that getting the cached row count works.
     """
+
     async with open_connection() as conn:
         async with conn.query("select 1;") as query:  # type: QueryResult
             rows = [r async for r in query]
@@ -359,6 +383,7 @@ async def test_insert_into_not_null():
     """
     Tests inserting into a not-null table.
     """
+
     async with open_connection() as conn:
         await conn.execute("create temp table test (id int primary key);")
 
@@ -379,3 +404,20 @@ async def test_max_rows():
         fetched = await conn.fetch("select * from test;", max_rows=1)
         assert len(fetched) == 1
         assert fetched[0].data[0] == 1
+
+
+async def test_transaction_when_cancelled():
+    """
+    Tests handling transactions when cancelled.
+    """
+
+    async with open_connection() as conn:
+        with anyio.CancelScope() as scope:
+            async with conn.with_transaction():
+                scope.cancel()  # noqa
+                await checkpoint()
+
+        # synchronise
+        await conn.execute("select 1;")
+
+        assert not conn.in_transaction

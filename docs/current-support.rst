@@ -28,9 +28,6 @@ Plan To Be Supported
 
 - Converters...
 
- * ... for arrays.
- * ... for JSON/JSONB.
- * ... for custom enums.
  * ... for most other built-in types!
 
 Won't Be Supported

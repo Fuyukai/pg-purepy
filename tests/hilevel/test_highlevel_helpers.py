@@ -8,7 +8,7 @@ from tests.hilevel import open_pool
 pytestmark = pytest.mark.anyio
 
 
-class TestEnum(Enum):
+class ExampleEnum(Enum):
     ONE = "one"
     TWO = "two"
     THREE = "three"
@@ -31,12 +31,12 @@ async def test_adding_converter():
         await pool.execute("drop type if exists test_ace_t;")
         await pool.execute("create type test_ace_t as enum ('one', 'two', 'three');")
         oid = await pool.find_oid_for_type("test_ace_t")
-        converter = EnumConverter(oid, TestEnum)
+        converter = EnumConverter(oid, ExampleEnum)
 
         pool.add_converter(converter)
 
         row_1 = await pool.fetch_one("select 'one'::test_ace_t;")
-        assert row_1[0] == TestEnum.ONE
+        assert row_1[0] == ExampleEnum.ONE
 
         # kill connection, to test that the converter is added after reconnect
         with pytest.raises(UnrecoverableDatabaseError) as e:
@@ -44,7 +44,7 @@ async def test_adding_converter():
 
         assert e.value.response.code == "57P01"
         row_2 = await pool.fetch_one("select 'two'::test_ace_t;")
-        assert row_2[0] == TestEnum.TWO
+        assert row_2[0] == ExampleEnum.TWO
 
 
 async def test_adding_converter_and_array():
@@ -57,7 +57,7 @@ async def test_adding_converter_and_array():
 
         oid_row = await pool.fetch_one("select oid from pg_type where typname = 'test_acaa';")
         oid = oid_row.data[0]
-        converter = EnumConverter(oid, TestEnum)
+        converter = EnumConverter(oid, ExampleEnum)
         pool.add_converter(converter)
 
         result_1 = await pool.fetch_one("select '{\"one\"}'::test_acaa[];")
@@ -66,4 +66,4 @@ async def test_adding_converter_and_array():
         # safe, this uses a set and will just overwrite the old converter cleanly.
         await pool.add_converter_with_array(converter)
         result_2 = await pool.fetch_one("select '{\"one\"}'::test_acaa[];")
-        assert result_2[0] == [TestEnum.ONE]
+        assert result_2[0] == [ExampleEnum.ONE]

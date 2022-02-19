@@ -4,6 +4,7 @@ from pg_purepy.connection import (
     AsyncPostgresConnection,
     QueryResult,
     open_database_connection,
+    RollbackTimeoutError,
 )
 from pg_purepy.conversion import *
 from pg_purepy.exc import *

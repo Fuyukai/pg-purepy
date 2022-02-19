@@ -30,7 +30,7 @@ from anyio.streams.tls import TLSStream
 
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.dbapi import convert_paramstyle
-from pg_purepy.exc import IllegalStateError
+from pg_purepy.exc import IllegalStateError, PostgresqlError
 from pg_purepy.messages import (
     BackendKeyData,
     BaseDatabaseError,
@@ -60,6 +60,12 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+class RollbackTimeoutError(PostgresqlError):
+    """
+    Raised when a ROLLBACK failed.
+    """
 
 
 class AsyncPostgresConnection(object):
@@ -331,12 +337,30 @@ class AsyncPostgresConnection(object):
         If ``max_rows`` is specified, then the query will only return up to that many rows.
         Otherwise, an unlimited amount may potentially be returned.
         """
+
         async with aclosing(
             self.lowlevel_query(query, *params, max_rows=max_rows, **kwargs)
         ) as agen:
             yield QueryResult(agen.__aiter__())
             # always wait
             await self.wait_until_ready()
+
+    async def _safely_rollback(self, exc):
+        """
+        Safely performs a rollback, even in the presence of a
+        """
+
+        with anyio.move_on_after(5.0, shield=True) as scope:
+            await self.execute("rollback;")
+
+        if scope.cancel_called:
+            with anyio.CancelScope(shield=True):
+                await self._stream.aclose()
+                self._dead = True
+
+            raise RollbackTimeoutError(
+                "Failed to rollback transaction in time, forcibly closing connection"
+            ) from exc
 
     @asynccontextmanager
     async def with_transaction(self) -> None:
@@ -347,8 +371,8 @@ class AsyncPostgresConnection(object):
         try:
             await self.execute("begin;")
             yield
-        except Exception:
-            await self.execute("rollback;")
+        except (Exception, anyio.get_cancelled_exc_class()) as e:
+            await self._safely_rollback(e)
             raise
         else:
             await self.execute("commit;")
@@ -369,6 +393,7 @@ class AsyncPostgresConnection(object):
         :param max_rows: The maximum rows to return.
         :param kwargs: The colon arguments for the query.
         """
+
         async with self.query(query, *params, max_rows=max_rows, **kwargs) as q:
             return [i async for i in q]
 
@@ -378,6 +403,7 @@ class AsyncPostgresConnection(object):
         """
         Like :meth:`.fetch`, but only fetches one row.
         """
+
         row = await self.fetch(query, *params, **kwargs)
 
         try:
@@ -397,6 +423,7 @@ class AsyncPostgresConnection(object):
         :param max_rows: The maximum rows to return.
         :param kwargs: The colon arguments for the query.
         """
+
         async with self.query(query, *params, max_rows=max_rows, **kwargs) as q:
             return await q.row_count()
 
@@ -424,7 +451,7 @@ class QueryResult:
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> PostgresMessage:
         # infinitely loops until we get a message we care about
 
         while True:
