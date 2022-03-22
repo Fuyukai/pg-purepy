@@ -121,9 +121,14 @@ def unrecoverable_error(
     @functools.wraps(fn)
     def wrapper(self: SansIOClient, code: BackendMessageCode, body: Buffer):
         if code == BackendMessageCode.ERROR_RESPONSE:
-            self.state = ProtocolState.UNRECOVERABLE_ERROR
             error = self._decode_error_response(body, recoverable=False, notice=False)
-            self._logger.fatal(f"Unrecoverable error: {error.severity}: {error.message}")
+            if error.code == "57014":
+                self.state = ProtocolState.RECOVERABLE_ERROR
+                error.recoverable = True
+            else:
+                self.state = ProtocolState.UNRECOVERABLE_ERROR
+                self._logger.fatal(f"Unrecoverable error: {error.severity}: {error.message}")
+
             return error
 
         return fn(self, code, body)
@@ -673,7 +678,7 @@ class SansIOClient(object):
 
         elif code == BackendMessageCode.BACKEND_KEY_DATA:
             pid = body.read_int()
-            key = body.read_int()
+            key = body.read_uint()
             return BackendKeyData(pid, key)
 
         raise UnknownMessageError(f"Expected ReadyForQuery, got {code!r}")

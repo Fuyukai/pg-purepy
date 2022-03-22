@@ -13,7 +13,7 @@ from pg_purepy.exc import PostgresqlError
 logging.basicConfig(level=logging.DEBUG)
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True, frozen=False)
 class PostgresMessage(object):
     """
     Base class for a PostgreSQL protocol message.
@@ -72,7 +72,7 @@ class BackendKeyData(PostgresMessage):
     #: The :class:`int` PID of this connection.
     pid: int = attr.ib()
 
-    #: The 64-biit :class:`int` secret key data of this connection.
+    #: The 64-bit :class:`int` secret key data of this connection.
     secret_key: int = attr.ib()
 
 
@@ -291,7 +291,7 @@ def _optional_int(value: Optional[str]) -> Optional[int]:
     return int(value)
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True, frozen=False)
 class ErrorOrNoticeResponse(PostgresMessage):
     """
     Returned when an error or a notice message is produced from the server.

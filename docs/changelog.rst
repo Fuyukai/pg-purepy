@@ -1,10 +1,12 @@
 Changelog
 =========
 
-0.8.0
------
+0.8.0 (2022-03-22)
+------------------
 
 - Make rollbacks reliable during cancellation.
+
+- Add cancellation support to the connection pool.
 
 0.7.4 (2021-10-29)
 ------------------

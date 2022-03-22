@@ -76,9 +76,17 @@ class AsyncPostgresConnection(object):
 
     def __init__(
         self,
+        address_or_path: Union[str, PathLike],
+        port: int,
+        ssl_context: SSLContext,
         stream: ByteStream,
         state: SansIOClient,
+        block_transactions: bool = False,
     ):
+        self._addr = address_or_path
+        self._port = port
+        self._ssl_context = ssl_context
+
         self._stream = stream
         self._protocol = state
 
@@ -89,6 +97,9 @@ class AsyncPostgresConnection(object):
 
         # backend PID as returned from postgresql.
         self._pid: int = -1
+        self._secret_key: int = -1
+
+        self._block_transactions = block_transactions
 
     @property
     def ready(self) -> bool:
@@ -189,6 +200,8 @@ class AsyncPostgresConnection(object):
                         warnings.warn(str(err))
 
                 elif isinstance(next_event, BackendKeyData):
+                    logger.debug(f"Got backend key data: {next_event.secret_key} / {next_event.pid}")
+                    self._secret_key = next_event.secret_key
                     self._pid = next_event.pid
 
                 yield next_event
@@ -206,7 +219,7 @@ class AsyncPostgresConnection(object):
 
     async def wait_until_ready(self):
         """
-        Waits until the conneection is ready. This discards all events. Useful in the authentication
+        Waits until the connection is ready. This discards all events. Useful in the authentication
         loop.
         """
         async with aclosing(self._read_until_ready()) as gen:
@@ -307,8 +320,7 @@ class AsyncPostgresConnection(object):
                         yield message
 
     ## Mid-level API. ##
-    @asynccontextmanager
-    async def query(
+    def query(
         self,
         query: Union[str, PreparedStatementInfo],
         *params,
@@ -338,16 +350,20 @@ class AsyncPostgresConnection(object):
         Otherwise, an unlimited amount may potentially be returned.
         """
 
-        async with aclosing(
-            self.lowlevel_query(query, *params, max_rows=max_rows, **kwargs)
-        ) as agen:
-            yield QueryResult(agen.__aiter__())
-            # always wait
-            await self.wait_until_ready()
+        @asynccontextmanager
+        async def _do():
+            async with aclosing(
+                self.lowlevel_query(query, *params, max_rows=max_rows, **kwargs)
+            ) as agen:
+                yield QueryResult(agen.__aiter__())
+                # always wait
+                await self.wait_until_ready()
+
+        return _do()
 
     async def _safely_rollback(self, exc):
         """
-        Safely performs a rollback, even in the presence of a
+        Safely performs a rollback, even in the presence of an exception.
         """
 
         with anyio.move_on_after(5.0, shield=True) as scope:
@@ -367,6 +383,11 @@ class AsyncPostgresConnection(object):
         """
         Asynchronous context manager that automatically opens and closes a transaction.
         """
+
+        if self._block_transactions:
+            raise ValueError("This connection was already checked out from a pool in a "
+                             "transaction and this method should not be used.")
+
 
         try:
             await self.execute("begin;")
@@ -485,20 +506,15 @@ class QueryResult:
         return self._row_count
 
 
-async def _open_connection(
+async def _open_socket(
     address_or_path: Union[str, PathLike],
-    username: str,
     *,
     port: int = 5432,
-    password: str = None,
-    database: str = None,
     ssl_context: SSLContext = None,
-) -> Tuple[SocketStream, AsyncPostgresConnection]:
+) -> SocketStream:
     """
-    Actual implementation of connection opening.
+    Opens the socket to the PostgreSQL server.
     """
-    # this method necessarily requires more error handling considerations than an ``async with``
-    # approach, but this method is specifically designed for the connection pool.
 
     if address_or_path.startswith("/"):
         logger.debug(f"Opening unix connection to {address_or_path}")
@@ -523,8 +539,29 @@ async def _open_connection(
         await sock.aclose()
         raise
 
+    return sock
+
+
+async def _open_connection(
+    address_or_path: Union[str, PathLike],
+    username: str,
+    *,
+    port: int = 5432,
+    password: str = None,
+    database: str = None,
+    ssl_context: SSLContext = None,
+) -> Tuple[SocketStream, AsyncPostgresConnection]:
+    """
+    Actual implementation of connection opening.
+    """
+
+    sock = await _open_socket(address_or_path, port=port, ssl_context=ssl_context)
+
     protocol = SansIOClient(username, database, password)
     conn = AsyncPostgresConnection(
+        address_or_path,  # used for pool cancellation
+        port,
+        ssl_context,
         sock,
         protocol,
     )
@@ -540,8 +577,7 @@ async def _open_connection(
 
 
 # noinspection PyProtectedMember
-@asynccontextmanager
-async def open_database_connection(
+def open_database_connection(
     address_or_path: Union[str, PathLike],
     username: str,
     *,
@@ -571,21 +607,26 @@ async def open_database_connection(
     :param database: The database to connect to. Defaults to the username.
     :param ssl_context: The SSL context to use for TLS connection. Enables TLS if specified.
     """
-    sock, conn = await _open_connection(
-        address_or_path=address_or_path,
-        username=username,
-        port=port,
-        password=password,
-        database=database,
-        ssl_context=ssl_context,
-    )
 
-    async with sock:
-        # this sucks but we send a Terminate in the normal case, a Terminate in the case of a
-        # database error, and a regular socket/TLS close in all other cases.
-        try:
-            yield conn
-            await conn._terminate()
-        except BaseDatabaseError:
-            await conn._terminate()
-            raise
+    @asynccontextmanager
+    async def _do():
+        sock, conn = await _open_connection(
+            address_or_path=address_or_path,
+            username=username,
+            port=port,
+            password=password,
+            database=database,
+            ssl_context=ssl_context,
+        )
+
+        async with sock:
+            # this sucks but we send a Terminate in the normal case, a Terminate in the case of a
+            # database error, and a regular socket/TLS close in all other cases.
+            try:
+                yield conn
+                await conn._terminate()
+            except BaseDatabaseError:
+                await conn._terminate()
+                raise
+
+    return _do()

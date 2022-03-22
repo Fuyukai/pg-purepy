@@ -41,6 +41,9 @@ class Buffer(object):
     def read_int(self) -> int:
         return int.from_bytes(self.read_bytes(4), byteorder="big", signed=True)
 
+    def read_uint(self) -> int:
+        return int.from_bytes(self.read_bytes(4), byteorder="big", signed=False)
+
     def read_long(self) -> int:
         return int.from_bytes(self.read_bytes(8), byteorder="big", signed=True)
 

@@ -22,8 +22,6 @@ Plan To Be Supported
 
 - ``COPY`` support (API pending).
 
-- High-level query cancellation (API pending).
-
 - Using SQL-side prepared queries.
 
 - Converters...

@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import logging
 import os
+import struct
 import warnings
 from contextlib import asynccontextmanager
 from typing import AsyncContextManager, Awaitable, Callable, List, Optional, Set
@@ -12,10 +13,11 @@ import attr
 from anyio.abc import SocketStream, TaskGroup
 
 from pg_purepy import ArrayConverter
-from pg_purepy.connection import AsyncPostgresConnection, _open_connection
+from pg_purepy.connection import AsyncPostgresConnection, _open_connection, _open_socket, \
+    RollbackTimeoutError
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransactionWarning
-from pg_purepy.messages import DataRow
+from pg_purepy.messages import DataRow, UnrecoverableDatabaseError, RecoverableDatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,7 @@ class PooledDatabaseInterface(object):
         """
         The maximum number of connections this pool may have idle.
         """
+
         return self._connection_count
 
     @property
@@ -66,6 +69,7 @@ class PooledDatabaseInterface(object):
         """
         The number of the connections that haven't currently been checked out.
         """
+
         return self._read.statistics().current_buffer_used
 
     @property
@@ -73,7 +77,23 @@ class PooledDatabaseInterface(object):
         """
         The number of tasks that are currently waiting for a connection to be used.
         """
+
         return self._read.statistics().tasks_waiting_receive
+
+    async def _cancel_query(self, conn: AsyncPostgresConnection):
+        """
+        Cancels the query running on this connection.
+        """
+
+        logger.debug(f"Cancelling query running on #{conn}")
+
+        sock = await _open_socket(conn._addr, port=conn._port,
+                                  ssl_context=conn._ssl_context)
+
+        async with sock:
+            # yay magic numbers
+            data = struct.pack(">IIII", 16, 80877102, conn._pid, conn._secret_key)
+            await sock.send(data)
 
     async def _open_new_connection(self, *args, **kwargs):
         sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)  #
@@ -169,10 +189,11 @@ class PooledDatabaseInterface(object):
         return await self._cleanup()
 
     @asynccontextmanager
-    async def _checkout_connection(self):
+    async def _checkout_connection(self, start_new_transaction: bool = False):
         """
         Checks out a single connection from the connection pool.
         """
+
         logger.debug("Checking out new connection from the pool...")
         checkout = await self._read.receive()
         logger.debug(
@@ -187,7 +208,15 @@ class PooledDatabaseInterface(object):
             await checkout.conn._safely_rollback(None)
 
         try:
+            if start_new_transaction:
+                logger.debug("Starting new transaction...")
+                await checkout.conn.execute("BEGIN;")
+
             yield checkout.conn
+
+            if start_new_transaction:
+                await checkout.conn.execute("COMMIT;")
+
             if checkout.conn.in_transaction:
                 warn = ConnectionInTransactionWarning(
                     f"Connection {checkout.conn} is being checked back in with a transaction open. "
@@ -196,10 +225,36 @@ class PooledDatabaseInterface(object):
                 warnings.warn(warn, stacklevel=3)
                 await checkout.conn._safely_rollback(None)
 
+        except anyio.get_cancelled_exc_class():  # noqa
+
+            # open a new conn to psql and cancel the query
+            with anyio.move_on_after(delay=5.0, shield=True) as scope:
+                await self._cancel_query(conn=checkout.conn)
+
+                try:
+                    await checkout.conn.wait_until_ready()
+                except RecoverableDatabaseError as e:
+                    if e.response.code == "57014":
+                        pass
+                    else:
+                        raise
+
+            if scope.cancel_called:
+                logger.warning(f"Failed to cancel query running on {checkout.conn}")
+
+            raise
+
         finally:
+            rollback_failed = None
+            if checkout.conn.in_transaction:
+                try:
+                    await checkout.conn._safely_rollback(None)
+                except RollbackTimeoutError as e:
+                    rollback_failed = e
+
             if checkout.conn.dead:
                 logger.warning(
-                    f"Connection {checkout.conn} is dead for some reason, scheduling "
+                    f"Connection {checkout.conn} is disconnected, scheduling "
                     "creation of a new connection"
                 )
                 with anyio.CancelScope(shield=True):
@@ -217,22 +272,29 @@ class PooledDatabaseInterface(object):
                         "already too many connections in the queue!"
                     )
 
+            if rollback_failed:
+                raise rollback_failed
+
     ## High-level methods. ##
-    @asynccontextmanager
-    async def checkout_in_transaction(self):
+    def checkout_in_transaction(self) -> AsyncContextManager[AsyncPostgresConnection]:
         """
         Checks out a new connection that automatically runs a transaction. This method MUST be used
         if you wish to execute something in a transaction.
         """
-        async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
-            async with conn.with_transaction():
+
+        @asynccontextmanager
+        async def _do():
+            async with self._checkout_connection(start_new_transaction=True) as conn:
                 yield conn
+
+        return _do()
 
     async def execute(self, query: str, *params, **kwargs) -> int:
         """
         Executes a query on the next available connection. See
         :meth:`.AsyncPostgresConnection.execute` for more information.
         """
+
         async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
             return await conn.execute(query, *params, **kwargs)
 
@@ -241,6 +303,7 @@ class PooledDatabaseInterface(object):
         Fetches the result of a query on the next available connection. See
         :meth:`.AsyncPostgresConnection.fetch` for more information.
         """
+
         async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
             return await conn.fetch(query, *params, **kwargs)
 
@@ -249,6 +312,7 @@ class PooledDatabaseInterface(object):
         Like :meth:`.fetch`, but only returns one row. See
         :meth:`.AsyncPostgresConnection.fetch_one` for more information.
         """
+
         async with self._checkout_connection() as conn:
             return await conn.fetch_one(query, *params, **kwargs)
 
@@ -257,6 +321,7 @@ class PooledDatabaseInterface(object):
         """
         Finds the OID for the type with the specified name.
         """
+
         row = await self.fetch_one("select oid from pg_type where typname = :name", name=type_name)
 
         if row is None:
@@ -280,6 +345,7 @@ class PooledDatabaseInterface(object):
         Adds a converter using the specified async function. Useful primarily for extension types
         where the oids aren't fixed.
         """
+
         async with self._checkout_connection() as conn:
             converter = await fn(conn)
 
@@ -290,6 +356,7 @@ class PooledDatabaseInterface(object):
         """
         Registers a converter, and adds the array type converter to it too.
         """
+
         self.add_converter(converter)
 
         async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
@@ -307,6 +374,7 @@ def determine_conn_count():
     """
     Determines the appropriate default connection count.
     """
+
     return (os.cpu_count() * 2) + 1
 
 

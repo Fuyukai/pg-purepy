@@ -81,3 +81,21 @@ If you wish to automatically add the array converter for converting PostgreSQL a
 type that is converted, use :meth:`.PooledDatabaseInterface.add_converter_with_array`.
 
 .. automethod:: pg_purepy.PooledDatabaseInterface.add_converter_with_array
+
+Cancellation
+------------
+
+Application-level cancellation is supported automatically. If a query is cancelled via a cancel
+scope, a cancellation request will be issued to the server to avoid having to drain more events
+from the server if possible.
+
+.. code-block:: python3
+
+    # timeout block will automatically cancel the query after a while
+    # and it will be returned to the pool for use (hopefully) immediately
+    with anyio.move_on_after(timeout):
+        async for result in pool.fetch(really_long_query):
+            await do_long_running_operation(result)
+
+This also works automatically in transactions - the insertion will be cancelled and the transaction
+will be rolled back.
