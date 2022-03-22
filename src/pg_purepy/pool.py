@@ -13,11 +13,19 @@ import attr
 from anyio.abc import SocketStream, TaskGroup
 
 from pg_purepy import ArrayConverter
-from pg_purepy.connection import AsyncPostgresConnection, _open_connection, _open_socket, \
-    RollbackTimeoutError
+from pg_purepy.connection import (
+    AsyncPostgresConnection,
+    RollbackTimeoutError,
+    _open_connection,
+    _open_socket,
+)
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransactionWarning
-from pg_purepy.messages import DataRow, UnrecoverableDatabaseError, RecoverableDatabaseError
+from pg_purepy.messages import (
+    DataRow,
+    RecoverableDatabaseError,
+    UnrecoverableDatabaseError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +95,7 @@ class PooledDatabaseInterface(object):
 
         logger.debug(f"Cancelling query running on #{conn}")
 
-        sock = await _open_socket(conn._addr, port=conn._port,
-                                  ssl_context=conn._ssl_context)
+        sock = await _open_socket(conn._addr, port=conn._port, ssl_context=conn._ssl_context)
 
         async with sock:
             # yay magic numbers

@@ -200,7 +200,9 @@ class AsyncPostgresConnection(object):
                         warnings.warn(str(err))
 
                 elif isinstance(next_event, BackendKeyData):
-                    logger.debug(f"Got backend key data: {next_event.secret_key} / {next_event.pid}")
+                    logger.debug(
+                        f"Got backend key data: {next_event.secret_key} / {next_event.pid}"
+                    )
                     self._secret_key = next_event.secret_key
                     self._pid = next_event.pid
 
@@ -385,9 +387,10 @@ class AsyncPostgresConnection(object):
         """
 
         if self._block_transactions:
-            raise ValueError("This connection was already checked out from a pool in a "
-                             "transaction and this method should not be used.")
-
+            raise ValueError(
+                "This connection was already checked out from a pool in a "
+                "transaction and this method should not be used."
+            )
 
         try:
             await self.execute("begin;")

@@ -3,8 +3,8 @@ import logging
 from pg_purepy.connection import (
     AsyncPostgresConnection,
     QueryResult,
-    open_database_connection,
     RollbackTimeoutError,
+    open_database_connection,
 )
 from pg_purepy.conversion import *
 from pg_purepy.exc import *

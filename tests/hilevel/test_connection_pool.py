@@ -15,6 +15,7 @@ async def test_successful_pool_usage():
     results = set()
 
     async with open_pool(conn_count=3) as p:
+
         async def execute(num: int):
             # the sleep ensures that the connections actually run in parallel, as trio will
             # schedule the tasks before that sleep expires.
