@@ -3,7 +3,7 @@ line-length = 100
 
 [tool.poetry]
 name = "pg-purepy"
-version = "0.7.4"
+version = "0.8.0"
 description = "A pure-Python anyio-based PostgreSQL adapter."
 authors = ["Lura Skye <l@veriny.tf>"]
 license = "LGPL-3.0-or-later"
@@ -16,13 +16,13 @@ classifiers = [
 readme = "README.rst"
 
 [tool.poetry.dependencies]
-python = "^3.8"
-anyio = "^3.1.0"
-scramp = "^1.4.0"
-attrs = "^21.2.0"
+python = ">=3.8,<4.0"
+anyio = "^3.5.0"
+scramp = "^1.4.1"
+attrs = "^21.4.0"
 async_generator = { version = "^1.10", python = "<3.10" }
-arrow = "^1.1.1"
-python-dateutil = "^2.8.1"
+arrow = "^1.2.2"
+python-dateutil = "^2.8.2"
 
 Sphinx = { version = ">=3.0,<4.0", optional = true }
 sphinxcontrib-trio = { version = "^1.1.2", optional = true }
