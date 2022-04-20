@@ -58,11 +58,12 @@ class PooledDatabaseInterface(object):
         self._raw_connections: Set[AsyncPostgresConnection] = set()
 
         self._nursery = nursery
+
+    async def _start(self, count: int):
         logger.debug(f"Opening {count} connections to the database.")
 
         for _ in range(0, count):
-            partial = functools.partial(self._open_new_connection)
-            nursery.start_soon(partial)
+            await self._open_new_connection()
 
     @property
     def max_connections(self) -> int:
@@ -102,7 +103,7 @@ class PooledDatabaseInterface(object):
             data = struct.pack(">IIII", 16, 80877102, conn._pid, conn._secret_key)
             await sock.send(data)
 
-    async def _open_new_connection(self, *args, **kwargs):
+    async def _open_new_connection(self):
         sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)  #
         self._raw_connections.add(conn)
         for converter in self._converters:
@@ -387,7 +388,7 @@ def determine_conn_count():
 
 @asynccontextmanager
 async def open_pool(
-    connection_count: int = determine_conn_count(), *args, **kwargs
+    connection_count: int = None, *args, **kwargs
 ) -> AsyncContextManager[PooledDatabaseInterface]:
     """
     Opens a new connection pool to a PostgreSQL server. This is an asynchronous context manager.
@@ -403,7 +404,12 @@ async def open_pool(
     By default, the connection count is (CPU_COUNT * 2) + 1.
     """
 
+    if connection_count is None:
+        connection_count = determine_conn_count()
+
     async with anyio.create_task_group() as tg, PooledDatabaseInterface(
         connection_count, tg, args, kwargs
     ) as pool:
+        await pool._start(connection_count)
+
         yield pool

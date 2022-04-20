@@ -1,6 +1,13 @@
 Changelog
 =========
 
+0.8.1 (2022-04-21)
+------------------
+
+- Make the connection pool open all connections sequentially. This makes error reporting better,
+  as errors such as invalid passwords are raised immediately, and without turning into an exception
+  group.
+
 0.8.0 (2022-03-22)
 ------------------
 

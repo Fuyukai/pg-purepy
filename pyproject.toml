@@ -3,7 +3,7 @@ line-length = 100
 
 [tool.poetry]
 name = "pg-purepy"
-version = "0.8.0"
+version = "0.8.1"
 description = "A pure-Python anyio-based PostgreSQL adapter."
 authors = ["Lura Skye <l@veriny.tf>"]
 license = "LGPL-3.0-or-later"
