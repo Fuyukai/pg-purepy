@@ -10,7 +10,7 @@ Installation
 Dependencies
 ------------
 
-``pg-purepy`` requires Python 3.10 or newer.
+``pg-purepy`` requires Python 3.11 or newer.
 
 Whilst ``pg-purepy`` has no C dependencies, it does have some external Python dependencies.
 

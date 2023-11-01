@@ -6,7 +6,7 @@
 Welcome to pg-purepy's documentation!
 =====================================
 
-``pg-purepy`` is a Python 3.9+ library for connecting to a PostgreSQL server. As the name suggests,
+``pg-purepy`` is a Python 3.11+ library for connecting to a PostgreSQL server. As the name suggests,
 it is written in pure-Python (no C dependencies), and exports three APIs:
 
 1. A high-level asynchronous AnyIO API based on connection pooling, that wraps multiple individual
@@ -21,7 +21,7 @@ it is written in pure-Python (no C dependencies), and exports three APIs:
 Requirements
 ------------
 
-1. ``pg-purepy`` requires at least Python 3.8. 3.7 may work, but is not actively supported.
+1. ``pg-purepy`` requires at least Python 3.11.
 
 2. ``pg-purepy`` requires the latest version of PostgreSQL, although in practice the protocol parser
    should work with versions from 9.4 upwards.
