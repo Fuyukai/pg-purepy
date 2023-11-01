@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import logging
 import os
 import struct
@@ -11,6 +10,7 @@ from typing import AsyncContextManager, Awaitable, Callable, List, Optional, Set
 import anyio
 import attr
 from anyio.abc import SocketStream, TaskGroup
+from anyio.streams.memory import MemoryObjectSendStream, MemoryObjectReceiveStream
 
 from pg_purepy import ArrayConverter
 from pg_purepy.connection import (
@@ -24,7 +24,6 @@ from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransaction
 from pg_purepy.messages import (
     DataRow,
     RecoverableDatabaseError,
-    UnrecoverableDatabaseError,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,9 +43,12 @@ class PooledDatabaseInterface(object):
     def __init__(self, count: int, nursery: TaskGroup, conn_args, conn_kwargs):
         self._connection_count = count
 
-        self._write, self._read = anyio.create_memory_object_stream(
-            max_buffer_size=count, item_type=OpenedConnection
+        _write, _read = anyio.create_memory_object_stream(
+            max_buffer_size=count
         )
+
+        self._write: MemoryObjectSendStream[OpenedConnection] = _write
+        self._read: MemoryObjectReceiveStream[OpenedConnection] = _read
 
         self._conn_args = conn_args
         self._conn_kwargs = conn_kwargs
@@ -89,7 +91,9 @@ class PooledDatabaseInterface(object):
 
         return self._read.statistics().tasks_waiting_receive
 
-    async def _cancel_query(self, conn: AsyncPostgresConnection):
+    # noinspection PyProtectedMember
+    @staticmethod
+    async def _cancel_query(conn: AsyncPostgresConnection):
         """
         Cancels the query running on this connection.
         """
@@ -191,7 +195,7 @@ class PooledDatabaseInterface(object):
             for i in forcibly_killed:
                 exceptions.append(ConnectionForciblyKilledError(i.conn))
 
-        raise anyio.ExceptionGroup(*exceptions)
+        raise ExceptionGroup(*exceptions)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         return await self._cleanup()
