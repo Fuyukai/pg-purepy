@@ -21,10 +21,12 @@
 ## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 
+# mypy: ignore-errors
+
 from __future__ import annotations
 
 import re
-from typing import Mapping
+from collections.abc import Mapping
 
 # My best guess at the parsing rules of hstore literals, since no formal
 # grammar is given.  This is mostly reverse engineered from PG's input parser
@@ -90,7 +92,7 @@ def _parse_hstore(hstore_str) -> Mapping[str, str]:
     return result
 
 
-def _serialize_hstore(val):
+def _serialize_hstore(val) -> str:
     """Serialize a dictionary into an hstore literal.  Keys and values must
     both be strings (except None for values).
     """
@@ -98,9 +100,10 @@ def _serialize_hstore(val):
     def esc(s, position):
         if position == "value" and s is None:
             return "NULL"
-        elif isinstance(s, str):
-            return '"%s"' % s.replace("\\", "\\\\").replace('"', r"\"")
-        else:
-            raise ValueError("%r in %s position is not a string." % (s, position))
 
-    return ", ".join("%s=>%s" % (esc(k, "key"), esc(v, "value")) for k, v in val.items())
+        if isinstance(s, str):
+            return '"%s"' % s.replace("\\", "\\\\").replace('"', r"\"")
+
+        raise ValueError(f"{s!r} in {position} position is not a string.")
+
+    return ", ".join("{}=>{}".format(esc(k, "key"), esc(v, "value")) for k, v in val.items())

@@ -1,16 +1,18 @@
 """
 The guts of the library - the protocol state machine.
 """
+
 from __future__ import annotations
 
 import enum
 import functools
 import logging
 import struct
+from collections.abc import Callable, Collection, Mapping
 from datetime import tzinfo
 from hashlib import md5
 from itertools import count as it_count
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 import dateutil.tz
 from scramp import ScramClient
@@ -102,8 +104,16 @@ class FrontendMessageCode(enum.IntEnum):
     CLOSE = ord("C")
 
 
+class NeedData:
+    """
+    Special sentinel object returned to signify the state machine needs more data,
+    """
+
+    pass
+
+
 #: Special singleton sentinel returned to signify the state machine needs more data.
-NEED_DATA = object()
+NEED_DATA = NeedData()
 
 #: Special singleton sentinel used to specify a state in the state machine cannot process any
 #: events.
@@ -119,7 +129,9 @@ def unrecoverable_error(
     """
 
     @functools.wraps(fn)
-    def wrapper(self: SansIOClient, code: BackendMessageCode, body: Buffer):
+    def wrapper(
+        self: SansIOClient, code: BackendMessageCode, body: Buffer
+    ) -> ErrorOrNoticeResponse | PostgresMessage:
         if code == BackendMessageCode.ERROR_RESPONSE:
             error = self._decode_error_response(body, recoverable=False, notice=False)
             if error.code == "57014":
@@ -245,7 +257,7 @@ class ProtocolState(enum.Enum):
 
 
 # noinspection PyMethodMayBeStatic,PyUnresolvedReferences
-class SansIOClient(object):
+class SansIOClient:
     """
     Sans-I/O state machine for the PostgreSQL C<->S protocol. This operates as an in-memory buffer
     that takes in Python-side structures and turns them into bytes to be sent to the server, and
@@ -257,9 +269,9 @@ class SansIOClient(object):
     PROTOCOL_MAJOR = 3
     PROTOCOL_MINOR = 0
 
-    _COMMANDS_WITH_COUNTS = {"DELETE", "UPDATE", "SELECT", "MOVE", "FETCH", "COPY"}
+    _COMMANDS_WITH_COUNTS: Collection[str] = {"DELETE", "UPDATE", "SELECT", "MOVE", "FETCH", "COPY"}
 
-    _PROTECTED_STATUSES = {
+    _PROTECTED_STATUSES: Mapping[str, str] = {
         "IntervalStyle": "iso_8601",
         "DateStyle": "ISO, DMY",
     }
@@ -267,10 +279,10 @@ class SansIOClient(object):
     def __init__(
         self,
         username: str,
-        database: str = None,
-        password: str = None,
-        application_name: Optional[str] = "pg-purepy",
-        logger_name: str = None,
+        database: str | None = None,
+        password: str | None = None,
+        application_name: str = "pg-purepy",
+        logger_name: str | None = None,
         ignore_unknown_types: bool = True,
     ):
         """
@@ -289,13 +301,13 @@ class SansIOClient(object):
             database = username
 
         #: Mapping of miscellaneous connection parameters.
-        self.connection_params = {}
+        self.connection_params: dict[str, Any] = {}
 
         #: If this connection is authenticated or not.
-        self.is_authenticated = False
+        self.is_authenticated: bool = False
 
         #: The converter classes used to convert between PostgreSQL and Python types.
-        self.converters: Dict[int, Converter] = {}
+        self.converters: dict[int, Converter] = {}
 
         #: Boolean value for if the current connection is in a transaction.
         self.in_transaction: bool = False
@@ -306,20 +318,20 @@ class SansIOClient(object):
         self._ignore_unknown_types = ignore_unknown_types
 
         # used when decoding data rows. unset by CommandComplete.
-        self._last_row_description: Optional[RowDescription] = None
+        self._last_row_description: RowDescription | None = None
 
         # used in two places:
         # 1) when a prepared statement is sent, we cache the name so we can return the ParseComplete
         # 2) when a describe is sent, we cache the name to be used in the resulting object
-        self._last_named_query: Optional[str] = None
+        self._last_named_query: str | None = None
 
         # used when a Describe message arrives.
-        self._last_parameter_oids: List[int] = []
+        self._last_parameter_oids: list[int] = []
 
         # stored data used for generating various packets
         self.username = username
         self.database = database
-        self.application_name = application_name
+        self.application_name: str = application_name
         self._password = password
 
         # the state of the protocol machine.
@@ -327,15 +339,15 @@ class SansIOClient(object):
 
         ## authentication
         # current authentication request. used by various auth functions
-        self._auth_request: Optional[AuthenticationRequest] = None
+        self._auth_request: AuthenticationRequest | None = None
         # scramp client, used for SASL
-        self._scramp_client: Optional[ScramClient] = None
+        self._scramp_client: ScramClient | None = None
 
         ## buffering
         # infinitely growable buffer used to store incoming packets
         self._buffer = bytearray()
         # last packet code received
-        self._current_packet_code = b""
+        self._current_packet_code = 0
         # number of bytes remaining in the current packet
         self._current_packet_remaining = 0
         # buffer used to store partial packet data
@@ -356,9 +368,9 @@ class SansIOClient(object):
         return self._state
 
     @state.setter
-    def state(self, value: ProtocolState):
+    def state(self, value: ProtocolState) -> None:
         before = self._state
-        self._logger.trace(f"Protocol changing state from {before} to {value}")
+        self._logger.trace(f"Protocol changing state from {before} to {value}")  # type: ignore
         self._state = value
 
     @property
@@ -397,7 +409,7 @@ class SansIOClient(object):
         return self._state in {ProtocolState.UNRECOVERABLE_ERROR, ProtocolState.TERMINATED}
 
     ## Internal API ##
-    def _check_password(self):
+    def _check_password(self) -> None:
         if self._password is None:
             raise MissingPasswordError(
                 "Server asked for authentication but we don't have a password"
@@ -418,6 +430,9 @@ class SansIOClient(object):
             self._conversion_context.client_encoding = value
         elif name == "TimeZone":
             gotten = dateutil.tz.gettz(value)
+            if gotten is None:
+                raise ValueError(f"PG returned invalid timezone {value}!")
+
             # coerce 'UTC' zoneinfo into tzutc
             if gotten == dateutil.tz.gettz("UTC"):
                 gotten = dateutil.tz.UTC
@@ -426,7 +441,7 @@ class SansIOClient(object):
         else:
             self.connection_params[name] = value
 
-        self._logger.trace(f"Parameter status: {name} -> {value}")
+        self._logger.trace(f"Parameter status: {name} -> {value}")  # type: ignore
 
         return ParameterStatus(name, value)
 
@@ -441,8 +456,8 @@ class SansIOClient(object):
         Decodes an error response, returning the :class:`.ErrorOrNoticeResponse` containing all the
         fields from the message.
         """
-        kwargs = {"recoverable": recoverable, "notice": notice}
-        ignored_codes = {ord("F"), ord("L"), ord("R")}
+        kwargs: dict[str, Any] = {"recoverable": recoverable, "notice": notice}
+        ignored_codes: set[int] = {ord("F"), ord("L"), ord("R")}
 
         while body:
             try:
@@ -474,10 +489,10 @@ class SansIOClient(object):
         Decodes the row description message.
         """
         field_count = body.read_short()
-        self._logger.trace(f"Got {field_count} fields in this row description.")
+        self._logger.trace(f"Got {field_count} fields in this row description.")  # type: ignore
         fields = []
 
-        for i in range(0, field_count):
+        for _i in range(0, field_count):
             name = body.read_cstring(encoding=self.encoding)
             table_oid = body.read_int()
             column_idx = body.read_short()
@@ -491,7 +506,7 @@ class SansIOClient(object):
 
             type_size = body.read_short()
             type_mod = body.read_int()
-            format_code = body.read_short()
+            format_code = body.read_short()  # noqa: F841, good for code explicitness
 
             desc = ColumnDescription(
                 name=name,
@@ -511,7 +526,7 @@ class SansIOClient(object):
         """
         assert self._last_row_description is not None, "missing row description"
 
-        column_values = []
+        column_values: list[Any | None] = []
         count = body.read_short()
 
         for idx in range(0, count):
@@ -528,10 +543,11 @@ class SansIOClient(object):
             col_oid = col_desc.type_oid
             converter = self.converters.get(col_oid)
             if converter is None:
-                data = data.decode(self.encoding)
+                column_values.append(data.decode(self.encoding))
             else:
-                data = converter.from_postgres(self._conversion_context, data.decode(self.encoding))
-            column_values.append(data)
+                column_values.append(
+                    converter.from_postgres(self._conversion_context, data.decode(self.encoding))
+                )
 
         return DataRow(self._last_row_description, column_values)
 
@@ -555,11 +571,13 @@ class SansIOClient(object):
 
     ### Authentication ###
     @unrecoverable_error
-    def _handle_during_SENT_STARTUP(self, code: BackendMessageCode, body: Buffer):
+    def _handle_during_SENT_STARTUP(
+        self, code: BackendMessageCode, body: Buffer
+    ) -> AuthenticationCompleted | AuthenticationRequest:
         if code == BackendMessageCode.NEGOTIATE_PROTOCOL_VERSION:
             raise ProtocolParseError("Server does not support our protocol")
 
-        elif code == BackendMessageCode.AUTHENTICATION_REQUEST:
+        if code == BackendMessageCode.AUTHENTICATION_REQUEST:
             # various different options
             decoded = body.read_int()
 
@@ -570,7 +588,7 @@ class SansIOClient(object):
                 return AuthenticationCompleted()
 
             # AuthenticationCleartextPassword
-            elif decoded == AuthenticationMethod.CLEARTEXT:
+            if decoded == AuthenticationMethod.CLEARTEXT:
                 self._check_password()
 
                 self.state = ProtocolState.CLEARTEXT_STARTUP
@@ -578,7 +596,7 @@ class SansIOClient(object):
                 return self._auth_request
 
             # AuthenticationMD5
-            elif decoded == AuthenticationMethod.MD5:
+            if decoded == AuthenticationMethod.MD5:
                 self._check_password()
 
                 self.state = ProtocolState.MD5_STARTUP
@@ -589,7 +607,7 @@ class SansIOClient(object):
                 return self._auth_request
 
             # AuthenticationSASL
-            elif decoded == AuthenticationMethod.SASL:
+            if decoded == AuthenticationMethod.SASL:
                 self._check_password()
 
                 self.state = ProtocolState.SASL_STARTUP
@@ -599,27 +617,34 @@ class SansIOClient(object):
                     sasl_methods=methods,
                 )
                 return self._auth_request
-            else:
-                raise NotImplementedError(f"Unknown authentication method: {decoded}")
 
-        else:
-            raise UnknownMessageError(f"Don't know how to handle {code} in {self.state}")
+            raise NotImplementedError(f"Unknown authentication method: {decoded}")
 
-    def _handle_during_SASL_FIRST_SENT(self, code: BackendMessageCode, body: Buffer):
+        raise UnknownMessageError(f"Don't know how to handle {code} in {self.state}")
+
+    def _handle_during_SASL_FIRST_SENT(
+        self, code: BackendMessageCode, body: Buffer
+    ) -> SASLContinue:
         if code == BackendMessageCode.AUTHENTICATION_REQUEST:
             body_code = body.read_int()
             if body_code == 11:  # SASL Continue
                 sasl_body = body.read_remaining().decode("ascii")
+
+                assert self._scramp_client
                 self._scramp_client.set_server_first(sasl_body)
                 self.state = ProtocolState.SASL_FIRST_RECEIVED
                 return SASLContinue()
-            else:
-                raise ProtocolParseError(
-                    f"Unexpected response: Expected SASLContinue, but got {body_code}"
-                )
+
+            raise ProtocolParseError(
+                f"Unexpected response: Expected SASLContinue, but got {body_code}"
+            )
+
+        raise UnknownMessageError(f"Unknown message code {code} for state {self.state}")
 
     @unrecoverable_error
-    def _generic_auth_handle(self, code: BackendMessageCode, body: Buffer):
+    def _generic_auth_handle(
+        self, code: BackendMessageCode, body: Buffer
+    ) -> AuthenticationCompleted | SASLComplete:
         """
         Authentication handler shared between various authentication "finalisation" methods.
         """
@@ -629,12 +654,13 @@ class SansIOClient(object):
                 self.is_authenticated = True
                 self.state = ProtocolState.AUTHENTICATED_WAITING_FOR_COMPLETION
                 return AuthenticationCompleted()
-            elif body_code == 12:  # SASLComplete
+
+            if body_code == 12:  # SASLComplete
                 return SASLComplete()
-            else:
-                raise ProtocolParseError(
-                    f"Unexpected response: Expected AuthenticationOk, but got {body_code}"
-                )
+
+            raise ProtocolParseError(
+                f"Unexpected response: Expected AuthenticationOk, but got {body_code}"
+            )
 
         raise UnknownMessageError(f"Unknown message code {code} for state {self.state}")
 
@@ -642,7 +668,7 @@ class SansIOClient(object):
     _handle_during_MD5_SENT = _generic_auth_handle
     _handle_during_SASL_FINAL_SENT = _generic_auth_handle
 
-    def _got_ready_for_query(self, body: Buffer):
+    def _got_ready_for_query(self, body: Buffer) -> ReadyForQuery:
         """
         Helper function used when a ReadyForQuery is received.
         """
@@ -655,7 +681,7 @@ class SansIOClient(object):
         return ReadyForQuery(rfqs)
 
     @unrecoverable_error
-    def _handle_ready_for_query(self, code: BackendMessageCode, body: Buffer):
+    def _handle_ready_for_query(self, code: BackendMessageCode, body: Buffer) -> ReadyForQuery:
         """
         Generic handler for when the server is ready for query.
         """
@@ -669,14 +695,14 @@ class SansIOClient(object):
         self,
         code: BackendMessageCode,
         body: Buffer,
-    ):
+    ) -> ReadyForQuery | BackendKeyData:
         """
         Handles incoming messages once we've authenticated.
         """
         if code == BackendMessageCode.READY_FOR_QUERY:
             return self._got_ready_for_query(body)
 
-        elif code == BackendMessageCode.BACKEND_KEY_DATA:
+        if code == BackendMessageCode.BACKEND_KEY_DATA:
             pid = body.read_int()
             key = body.read_uint()
             return BackendKeyData(pid, key)
@@ -684,31 +710,33 @@ class SansIOClient(object):
         raise UnknownMessageError(f"Expected ReadyForQuery, got {code!r}")
 
     ### Simple Query ###
-    def _got_row_description(self, body: Buffer):
+    def _got_row_description(self, body: Buffer) -> RowDescription:
         """
         Common logic for when we get a row description.
         """
         row_desc = self._decode_row_description(body)
         self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_ROW_DESCRIPTION
-        self._logger.trace(f"Incoming data has {len(row_desc.columns)} columns.")
+        self._logger.trace(f"Incoming data has {len(row_desc.columns)} columns.")  # type: ignore
         self._last_row_description = row_desc
         return row_desc
 
-    def _handle_during_SIMPLE_QUERY_SENT_QUERY(self, code: BackendMessageCode, body: Buffer):
+    def _handle_during_SIMPLE_QUERY_SENT_QUERY(
+        self, code: BackendMessageCode, body: Buffer
+    ) -> CommandComplete | RowDescription | ErrorOrNoticeResponse:
         """
-        Handles incoming messages once we've sent a query exection message.
+        Handles incoming messages once we've sent a query execution message.
         """
         if code == BackendMessageCode.COMMAND_COMPLETE:
             # commands such as Begin or Rollback don't return rows, thus don't return a
             # RowDescription.
             self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE
-            self._logger.trace("Query returned no rows")
+            self._logger.trace("Query returned no rows")  # type: ignore
             return self._decode_command_complete(body)
 
-        elif code == BackendMessageCode.ROW_DESCRIPTION:
+        if code == BackendMessageCode.ROW_DESCRIPTION:
             return self._got_row_description(body)
 
-        elif code == BackendMessageCode.ERROR_RESPONSE:
+        if code == BackendMessageCode.ERROR_RESPONSE:
             # this is a recoverable error, and simply moves onto the ReadyForQuery message.
             self.state = ProtocolState.RECOVERABLE_ERROR
             error = self._decode_error_response(body, recoverable=True, notice=False)
@@ -720,14 +748,14 @@ class SansIOClient(object):
     @unrecoverable_error
     def _handle_during_SIMPLE_QUERY_RECEIVED_ROW_DESCRIPTION(
         self, code: BackendMessageCode, body: Buffer
-    ):
+    ) -> DataRow | CommandComplete:
         """
         Handles incoming data rows during a simple query.
         """
         if code == BackendMessageCode.DATA_ROW:
             return self._decode_data_row(body)
 
-        elif code == BackendMessageCode.COMMAND_COMPLETE:
+        if code == BackendMessageCode.COMMAND_COMPLETE:
             self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE
             self._last_row_description = None
             return self._decode_command_complete(body)
@@ -737,7 +765,7 @@ class SansIOClient(object):
     @unrecoverable_error
     def _handle_during_SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE(
         self, code: BackendMessageCode, body: Buffer
-    ):
+    ) -> RowDescription | ReadyForQuery:
         """
         Waits for the ReadyForQuery response, or the next row description if this was a multi-query.
         """
@@ -745,17 +773,19 @@ class SansIOClient(object):
             # multiple queries in one statement
             return self._got_row_description(body)
 
-        elif code == BackendMessageCode.READY_FOR_QUERY:
+        if code == BackendMessageCode.READY_FOR_QUERY:
             return self._got_ready_for_query(body)
 
         raise UnknownMessageError(f"Unexpected message {code!r}")
 
-    _handle_during_SIMPLE_QUERY_ERRORED = _handle_ready_for_query
+    _handle_during_SIMPLE_QUERY_ERRORED: Callable[
+        [SansIOClient, BackendMessageCode, Buffer], PostgresMessage
+    ] = _handle_ready_for_query
 
     ### Multi query, Prepared Statements ###
     def _handle_during_MULTI_QUERY_SENT_PARSE_DESCRIBE(
         self, code: BackendMessageCode, body: Buffer
-    ):
+    ) -> ParseComplete | ErrorOrNoticeResponse:
         """
         Waits for the ParseComplete response.
         """
@@ -763,14 +793,14 @@ class SansIOClient(object):
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_PARSE_COMPLETE
             return ParseComplete(self._last_named_query)
 
-        elif code == BackendMessageCode.ERROR_RESPONSE:
+        if code == BackendMessageCode.ERROR_RESPONSE:
             # bad query
             self.state = ProtocolState.RECOVERABLE_ERROR
             return self._decode_error_response(body, recoverable=True, notice=False)
 
         raise UnknownMessageError(f"Expected ParseComplete, got {code!r}")
 
-    def _multi_query_got_description(self, body: Buffer):
+    def _multi_query_got_description(self, body: Buffer) -> PreparedStatementInfo:
         decoded = self._decode_row_description(body)
         lnq = self._last_named_query if self._last_named_query else None
         self._last_named_query = None
@@ -783,7 +813,7 @@ class SansIOClient(object):
 
         return message
 
-    def _multi_query_got_no_data(self):
+    def _multi_query_got_no_data(self) -> PreparedStatementInfo:
         lnq = self._last_named_query if self._last_named_query else None
         self._last_named_query = None
         message = PreparedStatementInfo(lnq, ParameterDescription(self._last_parameter_oids), None)
@@ -794,7 +824,7 @@ class SansIOClient(object):
     @unrecoverable_error
     def _handle_during_MULTI_QUERY_RECEIVED_PARSE_COMPLETE(
         self, code: BackendMessageCode, body: Buffer
-    ):
+    ) -> ParameterDescription | PreparedStatementInfo:
         """
         Decodes a possible ParameterDescription message, or a RowDescription message.
         """
@@ -805,7 +835,7 @@ class SansIOClient(object):
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_PARAMETER_DESCRIPTION
             return ParameterDescription(oids)
 
-        elif code == BackendMessageCode.ROW_DESCRIPTION:
+        if code == BackendMessageCode.ROW_DESCRIPTION:
             return self._multi_query_got_description(body)
 
         raise UnknownMessageError(f"Expected ParameterDescription or RowDescription, got {code!r}")
@@ -813,7 +843,7 @@ class SansIOClient(object):
     @unrecoverable_error
     def _handle_during_MULTI_QUERY_RECEIVED_PARAMETER_DESCRIPTION(
         self, code: BackendMessageCode, body: Buffer
-    ):
+    ) -> PreparedStatementInfo:
         """
         Decodes the incoming row description message.
         """
@@ -822,7 +852,7 @@ class SansIOClient(object):
             # Changes state to MULTI_QUERY_DESCRIBE_SYNC
             return self._multi_query_got_description(body)
 
-        elif code == BackendMessageCode.NO_DATA:
+        if code == BackendMessageCode.NO_DATA:
             return self._multi_query_got_no_data()
 
         raise UnknownMessageError(f"Expected RowDescription or NoData, got {code!r}")
@@ -830,7 +860,9 @@ class SansIOClient(object):
     _handle_during_MULTI_QUERY_DESCRIBE_SYNC = _handle_ready_for_query
 
     ### Multi query, incoming data ###
-    def _handle_during_MULTI_QUERY_SENT_BIND(self, code: BackendMessageCode, body: Buffer):
+    def _handle_during_MULTI_QUERY_SENT_BIND(
+        self, code: BackendMessageCode, body: Buffer
+    ) -> BindComplete | ErrorOrNoticeResponse:
         """
         Waits for the BindComplete message.
         """
@@ -838,29 +870,31 @@ class SansIOClient(object):
             self.state = ProtocolState.MULTI_QUERY_READING_DATA_ROWS
             return BindComplete()
 
-        elif code == BackendMessageCode.ERROR_RESPONSE:
+        if code == BackendMessageCode.ERROR_RESPONSE:
             self.state = ProtocolState.RECOVERABLE_ERROR
             return self._decode_error_response(body, recoverable=True, notice=False)
 
         raise UnknownMessageError(f"Expected BindComplete, got {code!r}")
 
-    def _handle_during_MULTI_QUERY_READING_DATA_ROWS(self, code: BackendMessageCode, body: Buffer):
+    def _handle_during_MULTI_QUERY_READING_DATA_ROWS(
+        self, code: BackendMessageCode, body: Buffer
+    ) -> DataRow | CommandComplete | ErrorOrNoticeResponse | PortalSuspended:
         """
         Reads in data rows, and waits for CommandComplete and ReadyForQuery.
         """
         if code == BackendMessageCode.DATA_ROW:
             return self._decode_data_row(body)
 
-        elif code == BackendMessageCode.COMMAND_COMPLETE:
+        if code == BackendMessageCode.COMMAND_COMPLETE:
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_COMMAND_COMPLETE
             return self._decode_command_complete(body)
 
-        elif code == BackendMessageCode.ERROR_RESPONSE:
+        if code == BackendMessageCode.ERROR_RESPONSE:
             # TODO: Maybe check the code, and reraise as unrecoverable?
             self.state = ProtocolState.RECOVERABLE_ERROR
             return self._decode_error_response(body, recoverable=True, notice=False)
 
-        elif code == BackendMessageCode.PORTAL_SUSPENDED:
+        if code == BackendMessageCode.PORTAL_SUSPENDED:
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_PORTAL_SUSPENDED
             return PortalSuspended()
 
@@ -874,13 +908,13 @@ class SansIOClient(object):
     _handle_during_RECOVERABLE_ERROR = _handle_ready_for_query
 
     ## Public API ##
-    def add_converter(self, converter: Converter):
+    def add_converter(self, converter: Converter) -> None:
         """
         Adds a new :class:`.Converter` to this protocol.
         """
         self.converters[converter.oid] = converter
 
-    def receive_bytes(self, data: bytes):
+    def receive_bytes(self, data: bytes) -> None:
         """
         Receives incoming bytes from the server. This merely appends to an internal buffer; you
         need to call :meth:`.next_event` to do anything.
@@ -892,7 +926,7 @@ class SansIOClient(object):
         assert self._state != ProtocolState.UNRECOVERABLE_ERROR, "state is unrecoverable error"
         assert self._state != ProtocolState.TERMINATED, "state is terminated"
 
-        self._logger.trace(f"Protocol: Received {len(data)} bytes")
+        self._logger.trace(f"Protocol: Received {len(data)} bytes")  # type: ignore
         self._buffer += data
 
     def do_startup(self) -> bytes:
@@ -938,7 +972,7 @@ class SansIOClient(object):
         self.state = ProtocolState.SIMPLE_QUERY_SENT_QUERY
         return header + packet_body
 
-    def do_create_prepared_statement(self, name: Optional[str], query_text: str) -> bytes:
+    def do_create_prepared_statement(self, name: str | None, query_text: str) -> bytes:
         """
         Creates a prepared statement. If ``name`` is not specified, this will create the unnamed
         prepared statement.
@@ -982,13 +1016,17 @@ class SansIOClient(object):
         self.state = ProtocolState.MULTI_QUERY_SENT_PARSE_DESCRIBE
         return full_packet
 
-    def do_bind_execute(self, info: PreparedStatementInfo, params: Any, row_count: int = None):
+    def do_bind_execute(
+        self, info: PreparedStatementInfo, params: Any, row_count: int | None = None
+    ) -> bytes:
         """
         Binds the specified ``params`` to the prepared statement specified by ``info``,
         then executes it.
 
         If ``row_count`` is not None, then only that many rows will be returned at maximum.
         Otherwise, an unlimited amount of rows will be returned.
+
+        :returns: The combined bind-execute-flush-sync packet to send to the server.
         """
         wanted_params = len(info.parameter_oids.oids)
         if len(params) != wanted_params:
@@ -1015,7 +1053,7 @@ class SansIOClient(object):
         ### Bind: Number of parameter values.
         packet_body_1 += struct.pack(">h", wanted_params)
         ### Bind: Parameter values.
-        for oid, obb in zip(info.parameter_oids.oids, params):
+        for oid, obb in zip(info.parameter_oids.oids, params, strict=True):
             if obb is None:
                 # Nulls are special cased with a -1 length.
                 packet_body_1 += struct.pack(">i", -1)
@@ -1034,10 +1072,7 @@ class SansIOClient(object):
             packet_body_1 += encoded
 
         ### Bind: Result columns formats.
-        if info.row_description:  # NoData results set the row_description to empty.
-            wanted_results = len(info.row_description.columns)
-        else:
-            wanted_results = 0
+        wanted_results = len(info.row_description.columns) if info.row_description else 0
 
         packet_body_1 += struct.pack(">h", wanted_results)
         for _ in range(0, wanted_results):
@@ -1067,7 +1102,7 @@ class SansIOClient(object):
         self._last_row_description = info.row_description
         return full_packet
 
-    def next_event(self) -> Union[PostgresMessage, object]:
+    def next_event(self) -> PostgresMessage | NeedData:
         """
         Reads the next event from the message queue.
 
@@ -1079,7 +1114,7 @@ class SansIOClient(object):
         ):
             raise IllegalStateError("The protocol is broken and won't work.")
 
-        self._logger.trace(f"Called next_event(), state is {self.state.name}")
+        self._logger.trace(f"Called next_event(), state is {self.state.name}")  # type: ignore
 
         if len(self._buffer) == 0:
             return NEED_DATA
@@ -1115,7 +1150,7 @@ class SansIOClient(object):
             message_data = self._buffer[5 : size + 5]
 
             if len(message_data) < size:
-                self._logger.trace(
+                self._logger.trace(  # type: ignore
                     f"Received truncated packet of {len(message_data)} size, need {size} bytes"
                 )
                 # not enough data yet.
@@ -1126,13 +1161,13 @@ class SansIOClient(object):
                 # reset buffer, otherwise we try and read the message code off again >.>
                 self._buffer = bytearray()
                 return NEED_DATA
-            else:
+            else:  # noqa: RET505
                 # yes enough data, set the buffer to the data after the size bytes for future
                 # processing
-                self._buffer = self._buffer[size + 5 :]
+                self._buffer = self._buffer[size + 5:]
 
         code = BackendMessageCode(code)
-        self._logger.trace(f"Got incoming message {code!r}")
+        self._logger.trace(f"Got incoming message {code!r}")  # type: ignore
 
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")
@@ -1150,12 +1185,13 @@ class SansIOClient(object):
 
         if code == BackendMessageCode.PARAMETER_STATUS:
             return self._handle_parameter_status(buffer)
-        elif code == BackendMessageCode.NOTICE_RESPONSE:
+
+        if code == BackendMessageCode.NOTICE_RESPONSE:
             return self._decode_error_response(body=buffer, recoverable=True, notice=True)
 
         # if we made it here, we can actually process the packet since we have it in full
 
-        result = method(code, buffer)
+        result: PostgresMessage | ErrorOrNoticeResponse = method(code, buffer)
         if result is None:
             raise Exception(f"{method.__qualname__} returned None! This is a bug!")
 
@@ -1176,21 +1212,26 @@ class SansIOClient(object):
         ## Authentication States ##
         if self.state == ProtocolState.CLEARTEXT_STARTUP:
             self._check_password()
-            self._logger.trace("Received cleartext password authentication request.")
+            self._logger.trace("Received cleartext password authentication request.")  # type: ignore
 
             code = FrontendMessageCode.PASSWORD
-            packet_body += self._password.encode(encoding="ascii")
+
+            # type ignore is fine, ``_check_password`` verifies itt.
+            packet_body += self._password.encode(encoding="ascii")  # type: ignore
             self.state = ProtocolState.CLEARTEXT_SENT
 
         elif self.state == ProtocolState.MD5_STARTUP:
+            assert self._auth_request, "state is MD5_STARTUP but no auth request packet?"
+            salt = self._auth_request.md5_salt
+            assert salt, "state is MD5_STARTUP but salt is None?"
             self._check_password()
 
+            assert self._password
+
             code = FrontendMessageCode.PASSWORD
-            inner_password = md5(self._password.encode("ascii") + self.username.encode("ascii"))
-            inner_password = inner_password.hexdigest().encode("ascii")
-            encoded_password = (
-                md5(inner_password + self._auth_request.md5_salt).hexdigest().encode("ascii")
-            )
+            hashed_password = md5(self._password.encode("ascii") + self.username.encode("ascii"))
+            inner_password = hashed_password.hexdigest().encode("ascii")
+            encoded_password = md5(inner_password + salt).hexdigest().encode("ascii")
             packet_body += b"md5"
             packet_body += encoded_password
             packet_body += b"\x00"
@@ -1199,6 +1240,8 @@ class SansIOClient(object):
 
         elif self.state == ProtocolState.SASL_STARTUP:
             code = FrontendMessageCode.PASSWORD
+            assert self._auth_request, "state is SASL_STARTUP but no auth request packet?"
+
             self._scramp_client = ScramClient(
                 mechanisms=self._auth_request.sasl_methods,
                 username=self.username,
@@ -1213,6 +1256,8 @@ class SansIOClient(object):
             self.state = ProtocolState.SASL_FIRST_SENT
 
         elif self.state == ProtocolState.SASL_FIRST_RECEIVED:
+            assert self._scramp_client, "state is SASL_FIRST_RECEIVED but scramp client is null?"
+
             code = FrontendMessageCode.PASSWORD
             message = self._scramp_client.get_client_final()
             packet_body += message.encode("ascii")

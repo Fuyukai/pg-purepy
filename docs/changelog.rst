@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.9.0 (2023-11-19)
+------------------
+
+- Fix type hints and add a ``py.typed`` marker.
+- Fix a mishap with ``ExceptionGroup`` in the pool handler.
+
 0.8.2 (2023-06-09)
 ------------------
 

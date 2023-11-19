@@ -4,13 +4,16 @@ import logging
 import os
 import struct
 import warnings
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager, Awaitable, Callable, List, Optional, Set
+from types import TracebackType
+from typing import Any, Literal, Self
 
 import anyio
 import attr
 from anyio.abc import SocketStream, TaskGroup
-from anyio.streams.memory import MemoryObjectSendStream, MemoryObjectReceiveStream
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from anyio.streams.tls import TLSStream
 
 from pg_purepy import ArrayConverter
 from pg_purepy.connection import (
@@ -31,37 +34,37 @@ logger = logging.getLogger(__name__)
 
 @attr.s(slots=True)
 class OpenedConnection:
-    sock: SocketStream = attr.ib()
+    sock: SocketStream | TLSStream = attr.ib()
     conn: AsyncPostgresConnection = attr.ib()
 
 
-class PooledDatabaseInterface(object):
+class PooledDatabaseInterface:
     """
     Connection pool based PostgreSQL interface.
     """
 
-    def __init__(self, count: int, nursery: TaskGroup, conn_args, conn_kwargs):
+    def __init__(self, count: int, nursery: TaskGroup, conn_args: Any, conn_kwargs: Any):
         self._connection_count = count
 
-        _write, _read = anyio.create_memory_object_stream(
+        self._write: MemoryObjectSendStream[OpenedConnection]
+        self._read: MemoryObjectReceiveStream[OpenedConnection]
+
+        self._write, self._read = anyio.create_memory_object_stream[OpenedConnection](
             max_buffer_size=count
         )
-
-        self._write: MemoryObjectSendStream[OpenedConnection] = _write
-        self._read: MemoryObjectReceiveStream[OpenedConnection] = _read
 
         self._conn_args = conn_args
         self._conn_kwargs = conn_kwargs
 
         # list of converters used when opening a new connection
-        self._converters = set()
+        self._converters: set[Converter] = set()
 
         # used to add new converters. non-queue.
-        self._raw_connections: Set[AsyncPostgresConnection] = set()
+        self._raw_connections: set[AsyncPostgresConnection] = set()
 
         self._nursery = nursery
 
-    async def _start(self, count: int):
+    async def _start(self, count: int) -> None:
         logger.debug(f"Opening {count} connections to the database.")
 
         for _ in range(0, count):
@@ -91,9 +94,8 @@ class PooledDatabaseInterface(object):
 
         return self._read.statistics().tasks_waiting_receive
 
-    # noinspection PyProtectedMember
     @staticmethod
-    async def _cancel_query(conn: AsyncPostgresConnection):
+    async def _cancel_query(conn: AsyncPostgresConnection) -> None:
         """
         Cancels the query running on this connection.
         """
@@ -107,8 +109,8 @@ class PooledDatabaseInterface(object):
             data = struct.pack(">IIII", 16, 80877102, conn._pid, conn._secret_key)
             await sock.send(data)
 
-    async def _open_new_connection(self):
-        sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)  #
+    async def _open_new_connection(self) -> None:
+        sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)
         self._raw_connections.add(conn)
         for converter in self._converters:
             conn.add_converter(converter=converter)
@@ -116,18 +118,18 @@ class PooledDatabaseInterface(object):
         wrapped = OpenedConnection(sock, conn)
 
         try:
-            self._write.send_nowait(wrapped)  # noqa
+            self._write.send_nowait(wrapped)
         except anyio.WouldBlock:
             self._raw_connections.remove(conn)
             raise RuntimeError(
                 "Asked to create a new connection, but there's already too many "
                 "connections in the queue!"
-            )
+            ) from None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def _cleanup(self):
+    async def _cleanup(self) -> Literal[False]:
         # Cancellation-resistant exit algorithm. This takes inspiration from
         # https://github.com/richardsheridan/trio-parallel/blob/37d0451f632e40fc8fa0bc1646180a83274219a3/trio_parallel/_proc.py#L56-L85
         # using a double shielded nursery setup that will try and gracefully exit the connection,
@@ -145,12 +147,12 @@ class PooledDatabaseInterface(object):
         swallowed = []
         forcibly_killed = []
 
-        async def kill(o: OpenedConnection):
+        async def kill(o: OpenedConnection) -> None:
             if o.conn.dead:
                 try:
                     # This *always* marks the connection as terminated, so even if this fails then
                     # .dead will be True for the second nursery.
-                    await o.conn._terminate()  # noqa
+                    await o.conn._terminate()
                 except Exception as e:
                     swallowed.append(e)
                 else:
@@ -190,18 +192,24 @@ class PooledDatabaseInterface(object):
         if not (swallowed or forcibly_killed):
             return False  # don't suppress error inside context manager
 
-        exceptions = [*swallowed]
+        exceptions: list[Exception] = [*swallowed]
         if forcibly_killed:
-            for i in forcibly_killed:
-                exceptions.append(ConnectionForciblyKilledError(i.conn))
+            exceptions += [ConnectionForciblyKilledError(i.conn) for i in forcibly_killed]
 
-        raise ExceptionGroup(*exceptions)
+        raise ExceptionGroup("Error when closing down connection pool!", exceptions)
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
         return await self._cleanup()
 
     @asynccontextmanager
-    async def _checkout_connection(self, start_new_transaction: bool = False):
+    async def _checkout_connection(
+        self, start_new_transaction: bool = False
+    ) -> AsyncGenerator[AsyncPostgresConnection, None]:
         """
         Checks out a single connection from the connection pool.
         """
@@ -215,7 +223,8 @@ class PooledDatabaseInterface(object):
 
         if checkout.conn.in_transaction:
             warnings.warn(
-                f"Connection {checkout.conn} still has a transaction open. Forcing rollback."
+                f"Connection {checkout.conn} still has a transaction open. Forcing rollback.",
+                stacklevel=2,
             )
             await checkout.conn._safely_rollback(None)
 
@@ -237,8 +246,7 @@ class PooledDatabaseInterface(object):
                 warnings.warn(warn, stacklevel=3)
                 await checkout.conn._safely_rollback(None)
 
-        except anyio.get_cancelled_exc_class():  # noqa
-
+        except anyio.get_cancelled_exc_class():
             # open a new conn to psql and cancel the query
             with anyio.move_on_after(delay=5.0, shield=True) as scope:
                 await self._cancel_query(conn=checkout.conn)
@@ -277,49 +285,46 @@ class PooledDatabaseInterface(object):
                         self._nursery.start_soon(self._open_new_connection)
             else:
                 try:
-                    self._write.send_nowait(checkout)  # noqa
+                    self._write.send_nowait(checkout)
                 except anyio.WouldBlock:
                     raise RuntimeError(
                         "Attempted to send connection back to queue, but there's "
                         "already too many connections in the queue!"
-                    )
+                    ) from None
 
             if rollback_failed:
                 raise rollback_failed
 
     ## High-level methods. ##
-    def checkout_in_transaction(self) -> AsyncContextManager[AsyncPostgresConnection]:
+    @asynccontextmanager
+    async def checkout_in_transaction(self) -> AsyncGenerator[AsyncPostgresConnection, None]:
         """
         Checks out a new connection that automatically runs a transaction. This method MUST be used
         if you wish to execute something in a transaction.
         """
 
-        @asynccontextmanager
-        async def _do():
-            async with self._checkout_connection(start_new_transaction=True) as conn:
-                yield conn
+        async with self._checkout_connection(start_new_transaction=True) as conn:
+            yield conn
 
-        return _do()
-
-    async def execute(self, query: str, *params, **kwargs) -> int:
+    async def execute(self, query: str, *params: Any, **kwargs: Any) -> int:
         """
         Executes a query on the next available connection. See
         :meth:`.AsyncPostgresConnection.execute` for more information.
         """
 
-        async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
+        async with self._checkout_connection() as conn:
             return await conn.execute(query, *params, **kwargs)
 
-    async def fetch(self, query: str, *params, **kwargs) -> List[DataRow]:
+    async def fetch(self, query: str, *params: Any, **kwargs: Any) -> list[DataRow]:
         """
         Fetches the result of a query on the next available connection. See
         :meth:`.AsyncPostgresConnection.fetch` for more information.
         """
 
-        async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
+        async with self._checkout_connection() as conn:
             return await conn.fetch(query, *params, **kwargs)
 
-    async def fetch_one(self, query: str, *params, **kwargs) -> Optional[DataRow]:
+    async def fetch_one(self, query: str, *params: Any, **kwargs: Any) -> DataRow | None:
         """
         Like :meth:`.fetch`, but only returns one row. See
         :meth:`.AsyncPostgresConnection.fetch_one` for more information.
@@ -329,7 +334,7 @@ class PooledDatabaseInterface(object):
             return await conn.fetch_one(query, *params, **kwargs)
 
     ## Utility Methods ##
-    async def find_oid_for_type(self, type_name: str) -> Optional[int]:
+    async def find_oid_for_type(self, type_name: str) -> int | None:
         """
         Finds the OID for the type with the specified name.
         """
@@ -341,7 +346,7 @@ class PooledDatabaseInterface(object):
 
         return row.data[0]
 
-    def add_converter(self, converter: Converter):
+    def add_converter(self, converter: Converter) -> None:
         """
         Registers a converter for all the connections on this pool.
         """
@@ -351,8 +356,8 @@ class PooledDatabaseInterface(object):
             conn.add_converter(converter)
 
     async def add_converter_using(
-        self, fn: Callable[[AsyncPostgresConnection], Awaitable[Optional[Converter]]]
-    ):
+        self, fn: Callable[[AsyncPostgresConnection], Awaitable[Converter | None]]
+    ) -> None:
         """
         Adds a converter using the specified async function. Useful primarily for extension types
         where the oids aren't fixed.
@@ -364,36 +369,39 @@ class PooledDatabaseInterface(object):
         if converter is not None:
             self.add_converter(converter)
 
-    async def add_converter_with_array(self, converter: Converter, **kwargs):
+    async def add_converter_with_array(self, converter: Converter, **kwargs: Any) -> None:
         """
         Registers a converter, and adds the array type converter to it too.
         """
 
         self.add_converter(converter)
 
-        async with self._checkout_connection() as conn:  # type: AsyncPostgresConnection
+        async with self._checkout_connection() as conn:
             row = await conn.fetch_one(
                 "select typarray::oid from pg_type where oid = :oid", oid=converter.oid
             )
             if row is None:
                 return
 
-            arrcv = ArrayConverter(oid=row[0], subconverter=converter, **kwargs)
+            arrcv = ArrayConverter(oid=row[0], subconverter=converter, **kwargs)  # type: ignore
             self.add_converter(arrcv)
 
 
-def determine_conn_count():
+def determine_conn_count() -> int:
     """
     Determines the appropriate default connection count.
     """
 
-    return (os.cpu_count() * 2) + 1
+    if count := os.cpu_count():
+        return (count * 2) + 1
+
+    return 2  # fuck it.
 
 
 @asynccontextmanager
 async def open_pool(
-    connection_count: int = None, *args, **kwargs
-) -> AsyncContextManager[PooledDatabaseInterface]:
+    connection_count: int | None = None, *args: Any, **kwargs: Any
+) -> AsyncGenerator[PooledDatabaseInterface, None]:
     """
     Opens a new connection pool to a PostgreSQL server. This is an asynchronous context manager.
 

@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import logging
 
 from pg_purepy.connection import (
@@ -27,8 +29,6 @@ if not hasattr(logging.Logger, "trace"):
         if self.isEnabledFor(5):
             self._log(5, message, args, **kws)
 
-    logging.Logger.trace = trace
+    logging.Logger.trace = trace  # type: ignore
 
     del trace
-
-del logging

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import List
 
 
 def pack_strings(*s: str, encoding: str = "ascii") -> bytes:
@@ -11,23 +10,23 @@ def pack_strings(*s: str, encoding: str = "ascii") -> bytes:
     return b"\x00".join(x.encode(encoding) for x in s) + b"\x00"
 
 
-class Buffer(object):
+class Buffer:
     """
     Simple buffer that allows reading data off of a bytearray ala Java ByteBuffer.
     """
 
-    def __init__(self, ba: bytearray = None):
+    def __init__(self, ba: bytearray | None = None) -> None:
         self.data = deque(ba if ba else b"")
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self.data)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
 
-    def read_bytes(self, count: int):
+    def read_bytes(self, count: int) -> bytearray:
         ba = bytearray()
-        for x in range(0, count):
+        for _x in range(0, count):
             ba.append(self.data.popleft())
 
         return ba
@@ -61,7 +60,7 @@ class Buffer(object):
 
         return buf.decode(encoding=encoding)
 
-    def read_all_cstrings(self, encoding: str, drop_empty: bool = False) -> List[str]:
+    def read_all_cstrings(self, encoding: str, drop_empty: bool = False) -> list[str]:
         """
         Reads all null-terminated C strings from the buffer.
         """
@@ -71,13 +70,14 @@ class Buffer(object):
 
         if drop_empty:
             return [i for i in items if i]
-        else:
-            return items
+
+        return items
 
     def read_remaining(self) -> bytes:
         """
-        Reads out the remainer of this buffer.
+        Reads out the remainder of this buffer.
         """
+
         ba = bytes(bytearray(self.data))
         self.data = deque()
         return ba

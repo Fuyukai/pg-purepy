@@ -19,3 +19,10 @@ aaaa.py
 .coverage
 htmlcov/
 dist/
+
+*.pyc
+profile.prof
+
+.mypy_cache
+.ruff_cache
+.pytest_cache

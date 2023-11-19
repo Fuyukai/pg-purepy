@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Type
+from typing import TYPE_CHECKING, Any, cast
 
 from pg_purepy.conversion.abc import Converter
 
@@ -17,7 +17,7 @@ class EnumConverter(Converter):
     def __init__(
         self,
         oid: int,
-        enum_klass: Type[Enum],
+        enum_klass: type[Enum],
         *,
         use_member_values: bool = False,
         lowercase_names: bool = True,
@@ -39,21 +39,21 @@ class EnumConverter(Converter):
     def from_postgres(self, context: ConversionContext, data: str) -> Any:
         if self._use_members:
             return self._member_klass(data)
-        else:
-            try:
-                return self._member_klass[data]
-            except KeyError:
-                if not self._lowercase_names:
-                    raise
 
-                # hmm...
-                return self._member_klass[data.upper()]
+        try:
+            return self._member_klass[data]
+        except KeyError:
+            if not self._lowercase_names:
+                raise
+
+            # hmm...
+            return self._member_klass[data.upper()]
 
     def to_postgres(self, context: ConversionContext, data: Enum) -> str:
         if self._use_members:
-            return data.value
-        else:
-            if self._lowercase_names:
-                return data.name.lower()
-            else:
-                return data.namee
+            return cast(str, data.value)
+
+        if self._lowercase_names:
+            return data.name.lower()
+
+        return data.name

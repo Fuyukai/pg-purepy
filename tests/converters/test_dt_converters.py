@@ -1,7 +1,9 @@
 """
 Tests date/time related converters.
 """
+
 import datetime
+from typing import cast
 
 import arrow
 import dateutil.tz
@@ -29,12 +31,15 @@ async def test_timestamptz_converter():
         )
 
         row_1 = await conn.fetch_one("select dt from test_ttz_in;")
+        assert row_1
         assert isinstance(row_1.data[0], arrow.Arrow)
         assert row_1.data[0] == juno
 
         await conn.execute("set timezone to 'Europe/Helsinki';")
         row_2 = await conn.fetch_one("select dt from test_ttz_in;")
-        dt: arrow.Arrow = row_2.data[0]
+        assert row_2
+
+        dt: arrow.Arrow = cast(arrow.Arrow, row_2.data[0])
         assert dt.hour == 19
         assert dt.hour != juno.hour
         assert dt == juno
@@ -49,6 +54,8 @@ async def test_date_converter():
         lolk = datetime.date(2015, 8, 11)
         await conn.execute("insert into test_dci(dt) values (:date)", date=lolk)
         result = await conn.fetch_one("select * from test_dci;")
+        assert result
+
         assert result.data[0] == lolk
 
 
@@ -61,6 +68,8 @@ async def test_time_converter():
         rn = datetime.time(1, 35, 33)
         await conn.execute("insert into test_tc values (:time);", time=rn)
         result = await conn.fetch_one("select * from test_tc;")
+
+        assert result
         assert result.data[0] == rn
 
 
@@ -73,4 +82,5 @@ async def test_dt_infinity():
         await conn.execute("insert into test_dti_in(dt) values (:inf);", inf="infinity")
 
         result = await conn.fetch_one("select * from test_dti_in;")
+        assert result
         assert result.data[0] == "infinity"

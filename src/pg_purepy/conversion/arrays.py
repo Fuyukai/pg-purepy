@@ -1,9 +1,9 @@
 """
 Converter type for array objects.
 """
-from enum import Enum
+
 from functools import partial
-from typing import Any, List
+from typing import Any
 
 from pg_purepy.conversion.abc import ConversionContext, Converter
 
@@ -17,7 +17,7 @@ class ArrayConverter(Converter):
     every value in the array.
     """
 
-    def __init__(self, oid: int, subconverter: Converter, quote_inner: bool = False):
+    def __init__(self, oid: int, subconverter: Converter, quote_inner: bool = False) -> None:
         """
         :param oid: The OID of the array type (not the base type!)
         :param subconverter: The converter for individual elements inside the array.
@@ -27,11 +27,11 @@ class ArrayConverter(Converter):
         self._subconverter = subconverter
         self._quote_inner = quote_inner
 
-    def from_postgres(self, context: ConversionContext, data: str) -> List[Any]:
+    def from_postgres(self, context: ConversionContext, data: str) -> list[Any]:
         p = partial(self._subconverter.from_postgres, context)
         return _parse_array(data, p)
 
-    def to_postgres(self, context: ConversionContext, data: List[Any]) -> str:
+    def to_postgres(self, context: ConversionContext, data: list[Any]) -> str:
         converted = [
             self._subconverter.to_postgres(context, i) if i is not None else "NULL" for i in data
         ]

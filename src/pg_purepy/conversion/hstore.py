@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pg_purepy.conversion._parse_hstore import _parse_hstore, _serialize_hstore
 from pg_purepy.conversion.abc import ConversionContext, Converter
@@ -24,9 +24,10 @@ class HStoreConverter(Converter):
         return _serialize_hstore(data)
 
 
-async def get_hstore_converter(connection: AsyncPostgresConnection) -> Optional[HStoreConverter]:
+async def get_hstore_converter(connection: AsyncPostgresConnection) -> HStoreConverter | None:
     """
-    Gets the hstore converter for a connection.
+    Gets the hstore converter for a connection. This may return None if the hstore extension
+    is not currently enabled.
     """
 
     result = await connection.fetch_one(
@@ -36,4 +37,6 @@ async def get_hstore_converter(connection: AsyncPostgresConnection) -> Optional[
         return None
 
     oid = result.data[0]
+    assert oid
+
     return HStoreConverter(oid)

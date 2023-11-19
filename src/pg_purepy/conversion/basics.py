@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pg_purepy.conversion.abc import Converter
 
@@ -8,22 +9,27 @@ if TYPE_CHECKING:
     from pg_purepy.protocol import ConversionContext
 
 
-class SimpleFunctionConverter(Converter):
+ConvType = TypeVar("ConvType")
+
+
+class SimpleFunctionConverter(Converter, Generic[ConvType]):
     """
     A simple converter that calls fn_from_pg to convert to a Python type, and fn_to_pg to convert
     from a Python type.
     """
 
-    def __init__(self, oid: int, fn_from_pg, fn_to_pg):
+    def __init__(
+        self, oid: int, fn_from_pg: Callable[[str], ConvType], fn_to_pg: Callable[[ConvType], str]
+    ) -> None:
         self.oid = oid
 
         self._from_pg = fn_from_pg
         self._to_pg = fn_to_pg
 
-    def from_postgres(self, context: ConversionContext, data: str) -> Any:
+    def from_postgres(self, context: ConversionContext, data: str) -> ConvType:
         return self._from_pg(data)
 
-    def to_postgres(self, context: ConversionContext, data: Any) -> str:
+    def to_postgres(self, context: ConversionContext, data: ConvType) -> str:
         return self._to_pg(data)
 
 

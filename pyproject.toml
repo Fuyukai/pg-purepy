@@ -3,7 +3,7 @@ line-length = 100
 
 [tool.poetry]
 name = "pg-purepy"
-version = "0.8.3"
+version = "0.9.0"
 description = "A pure-Python anyio-based PostgreSQL adapter."
 authors = ["Lura Skye <l@veriny.tf>"]
 license = "LGPL-3.0-or-later"
@@ -24,17 +24,19 @@ python-dateutil = "^2.8.2"
 anyio = "^4.0.0"
 
 [tool.poetry.group.docs.dependencies]
-sphinx = "^6.1"
-sphinx-rtd-theme = "^1.2.2"
-sphinxcontrib-trio = "^1.1.2"
+sphinx = "^7.2.6"
+sphinx-rtd-theme = "^1.3.0"
 sphinx-inline-tabs = "^2023.4.21"
-sphinx-autodoc-typehints = "^1.23.0"
+sphinx-autodoc-typehints = "^1.25.2"
+sphinxcontrib-jquery = "^4.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
 trio = "^0.22.2"
 isort = "^5.12.0"
 pytest-cov = "^4.1.0"
+mypy = "^1.7.0"
+ruff = "^0.1.6"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "sphinxcontrib-trio", "sphinx-autodoc-typehints", "sphinx-rtd-theme",
@@ -52,13 +54,58 @@ source = ["pg_purepy"]
 [tool.coverage.report]
 exclude_lines = [
     "raise UnknownMessageError",  # this only happens if the postgresql server breaks
-    "pragma: no cover"  # defualt behaviour...
+    "pragma: no cover"  # default behaviour...
 ]
 
-[tool.isort]
-profile = "black"
+[tool.ruff]
+target-version = "py311"
+respect-gitignore = true
+# fix = true
+src = ["src/pg_purepy"]
+line-length = 100
+show-source = true
+
+select = [
+  "RUF", 
+  "F", 
+  "E", 
+  "W",
+  "I", 
+  "UP", 
+  "B",  
+  "YTT", 
+  "ASYNC",
+  "TRIO", 
+  "PYI", 
+  "SIM", 
+  "RET",
+  "PERF",
+]
+ignore = [
+    "W291",  # SHUT THE FUCK UP WHEN I'M TYPING COMMENTS
+    "W293",
+    "E266"
+]
+
+[tool.ruff.isort]
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+local_partial_types = true
+warn_unused_ignores = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_return_any = true
+
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+check_untyped_defs = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-

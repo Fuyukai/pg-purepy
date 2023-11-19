@@ -31,10 +31,12 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+# mypy: ignore-errors
+
 from itertools import count
 
 
-def convert_paramstyle(query, args):  # pragma: no cover
+def convert_paramstyle(query, args):  # pragma: no cover, no
     # I don't see any way to avoid scanning the query string char by char,
     # so we might as well take that careful approach and create a
     # state-based scanner.  We'll use int variables for the state.
@@ -46,25 +48,18 @@ def convert_paramstyle(query, args):  # pragma: no cover
     INSIDE_CO = 5  # inside inline comment eg. --
 
     in_quote_escape = False
-    in_param_escape = False
     placeholders = []
     output_query = []
-    param_idx = map(lambda x: "$" + str(x), count(1))
+    map(lambda x: "$" + str(x), count(1))
     state = OUTSIDE
     prev_c = None
     for i, c in enumerate(query):
-        if i + 1 < len(query):
-            next_c = query[i + 1]
-        else:
-            next_c = None
+        next_c = query[i + 1] if i + 1 < len(query) else None
 
         if state == OUTSIDE:
             if c == "'":
                 output_query.append(c)
-                if prev_c == "E":
-                    state = INSIDE_ES
-                else:
-                    state = INSIDE_SQ
+                state = INSIDE_ES if prev_c == "E" else INSIDE_SQ
             elif c == '"':
                 output_query.append(c)
                 state = INSIDE_QI
@@ -72,7 +67,7 @@ def convert_paramstyle(query, args):  # pragma: no cover
                 output_query.append(c)
                 if prev_c == "-":
                     state = INSIDE_CO
-            elif c == ":" and next_c not in ":=" and prev_c != ":":
+            elif c == ":" and next_c not in ":=" and prev_c != ":":  # type: ignore
                 # Same logic for : as in numeric parameters
                 state = INSIDE_PN
                 placeholders.append("")

@@ -22,6 +22,8 @@ async def test_converters_int():
             await conn.execute(f"create temp table test_int_{cast} (id {cast} primary key);")
             await conn.execute(f"insert into test_int_{cast} values ($1);", 39)
             result_in = await conn.fetch_one(f"select id from test_int_{cast};")
+            assert result_in
+
             assert result_in.data[0] == 39
 
 
@@ -31,9 +33,11 @@ async def test_converter_bool():
     """
     async with open_connection() as conn:
         true = await conn.fetch_one("select true;")
+        assert true
         assert true.data[0] is True
 
         false = await conn.fetch_one("select false;")
+        assert false
         assert false.data[0] is False
 
         await conn.execute("create temp table test_bool (id int primary key, value boolean);")
@@ -52,5 +56,6 @@ async def test_converter_bytea():
     async with open_connection() as conn:
         # trick: both in and out conversion
         ba = await conn.fetch_one(r"select $1::bytea;", b"\x00\x01")
+        assert ba
         assert isinstance(ba.data[0], bytes)
         assert ba.data[0] == b"\x00\x01"

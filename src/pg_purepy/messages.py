@@ -4,7 +4,7 @@ import abc
 import enum
 import logging
 from io import StringIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import attr
 
@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 @attr.s(slots=True, frozen=False)
-class PostgresMessage(object):
+class PostgresMessage:
     """
     Base class for a PostgreSQL protocol message.
     """
@@ -33,7 +33,7 @@ class AuthenticationMethod(enum.IntEnum):
     SASL = 10
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class AuthenticationRequest(PostgresMessage):
     """
     Returned when the PostgreSQL server requires authentication.
@@ -43,27 +43,27 @@ class AuthenticationRequest(PostgresMessage):
     method: AuthenticationMethod = attr.ib()
 
     #: When doing MD5 authentication, the salt to use.
-    md5_salt: Optional[bytes] = attr.ib(default=None)
+    md5_salt: bytes | None = attr.ib(default=None)
 
     #: When doing SASL authentication, the list of authentication methods.
-    sasl_methods: List[str] = attr.ib(default=[])
+    sasl_methods: list[str] = attr.ib(default=[])
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class SASLContinue(PostgresMessage):
     """
     Returned when the PostgreSQL server wants us to continue doing SASL authentication.
     """
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class SASLComplete(PostgresMessage):
     """
     Returned when SASL authentication is complete.
     """
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class BackendKeyData(PostgresMessage):
     """
     Misc data used for cancellation.
@@ -76,14 +76,14 @@ class BackendKeyData(PostgresMessage):
     secret_key: int = attr.ib()
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class AuthenticationCompleted(PostgresMessage):
     """
     Returned when authentication is completed.
     """
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class ParameterStatus(PostgresMessage):
     """
     Returned when a configuration parameter is changed, e.g. via SET.
@@ -111,7 +111,7 @@ class ReadyForQueryState(enum.Enum):
     ERRORED_TRANSACTION = ord("E")
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class ReadyForQuery(PostgresMessage):
     """
     Returned when the protocol machine is ready for the next query cycle.
@@ -156,10 +156,10 @@ class ColumnDescription:
     name: str = attr.ib()
 
     #: The optional :class:`int` table OID of this column.
-    table_oid: Optional[int] = attr.ib()
+    table_oid: int | None = attr.ib()
 
     #: The optional :class:`int` column index of this column.
-    column_index: Optional[int] = attr.ib()
+    column_index: int | None = attr.ib()
 
     #: The :class`int` type OID of this column.
     type_oid: int = attr.ib()
@@ -171,14 +171,14 @@ class ColumnDescription:
     type_modifier: int = attr.ib()
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class QueryResultMessage(PostgresMessage, abc.ABC):
     """
     Superclass for query results.
     """
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class RowDescription(QueryResultMessage):
     """
     Describes the rows of a query.
@@ -186,10 +186,10 @@ class RowDescription(QueryResultMessage):
 
     #: The list of :class:`.ColumnDescription` instances that wraps the decoding info for each
     #: column returned in this row.
-    columns: List[ColumnDescription] = attr.ib()
+    columns: list[ColumnDescription] = attr.ib()
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class DataRow(QueryResultMessage):
     """
     A singular data row. This contains a :class:`.RowDescription` and a list of converted data
@@ -201,24 +201,24 @@ class DataRow(QueryResultMessage):
 
     #: A list of column values, in the same order as the description, that contains the actual
     #: converted data incoming from the server.
-    data: List[Any] = attr.ib()
+    data: list[Any | None] = attr.ib()
 
-    def __getitem__(self, item):  # pragma: no cover
+    def __getitem__(self, item: int) -> Any | None:  # pragma: no cover
         return self.data[item]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any | None]:
         """
         Converts this data row to a dict. If multiple columns have the same name, this may not
         end up the way you expect.
         """
         d = {}
-        for col, data in zip(self.description.columns, self.data):
+        for col, data in zip(self.description.columns, self.data, strict=True):
             d[col.name] = data
 
         return d
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class CommandComplete(QueryResultMessage):
     """
     Returned when a single query command is complete.
@@ -229,30 +229,30 @@ class CommandComplete(QueryResultMessage):
 
     #: The :class:`int` row count returned. This may be None if the command does not have a row
     #: count (e.g. SHOW or SET).
-    row_count: Optional[int] = attr.ib()
+    row_count: int | None = attr.ib()
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class ParseComplete(PostgresMessage):
     """
     Returned when parsing a prepared statement completes.
     """
 
     #: The :class:`str` name of the statement prepared. None means the unnamed prepared statement.
-    statement_name: Optional[str] = attr.ib()
+    statement_name: str | None = attr.ib()
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class ParameterDescription(PostgresMessage):
     """
     Returned when parsing a ParameterDescription message.
     """
 
     #: The list of :class:`int` OIDs within this description.
-    oids: List[int] = attr.ib()
+    oids: list[int] = attr.ib()
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class PreparedStatementInfo(PostgresMessage):
     """
     Contains the state of a prepared statement. Returned for a RowDescription over a prepared
@@ -260,31 +260,31 @@ class PreparedStatementInfo(PostgresMessage):
     """
 
     #: The :class:`str` name of the prepared statement.
-    name: Optional[str] = attr.ib()
+    name: str | None = attr.ib()
 
     #: The :class:`~.ParameterDescription` for the parameters for this prepared statement.
     parameter_oids: ParameterDescription = attr.ib()
 
     #: The :class:`~.RowDescription` of the incoming row data of the prepared statement.
     #: This may be None if this query doesn't return any data.
-    row_description: Optional[RowDescription] = attr.ib()
+    row_description: RowDescription | None = attr.ib()
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class BindComplete(PostgresMessage):
     """
     Returned when a Bind message completes successfully.
     """
 
 
-@attr.s(slots=True, frozen=True)
+@attr.s(slots=True)
 class PortalSuspended(PostgresMessage):
     """
     Returned when the execution portal is suspended.
     """
 
 
-def _optional_int(value: Optional[str]) -> Optional[int]:
+def _optional_int(value: str | None) -> int | None:
     if value is None:
         return None
 
@@ -310,25 +310,25 @@ class ErrorOrNoticeResponse(PostgresMessage):
 
     # optional parameters
     hint: str = attr.ib(default=None)
-    detail: Optional[str] = attr.ib(default=None)
-    position: Optional[int] = attr.ib(default=None, converter=_optional_int)
-    internal_position: Optional[int] = attr.ib(default=None, converter=_optional_int)
-    internal_query: Optional[str] = attr.ib(default=None)
-    where: Optional[str] = attr.ib(default=None)
-    schema_name: Optional[str] = attr.ib(default=None)
-    table_name: Optional[str] = attr.ib(default=None)
-    column_name: Optional[str] = attr.ib(default=None)
-    data_type_name: Optional[str] = attr.ib(default=None)
-    constraint_name: Optional[str] = attr.ib(default=None)
+    detail: str | None = attr.ib(default=None)
+    position: int | None = attr.ib(default=None, converter=_optional_int)
+    internal_position: int | None = attr.ib(default=None, converter=_optional_int)
+    internal_query: str | None = attr.ib(default=None)
+    where: str | None = attr.ib(default=None)
+    schema_name: str | None = attr.ib(default=None)
+    table_name: str | None = attr.ib(default=None)
+    column_name: str | None = attr.ib(default=None)
+    data_type_name: str | None = attr.ib(default=None)
+    constraint_name: str | None = attr.ib(default=None)
 
 
 class BaseDatabaseError(PostgresqlError):
     """
-    An exception produceed from the database, usually from an ErrorOrNoticeResponse message. This does
-    NOT include things such as protocol parsing errors.
+    An exception produceed from the database, usually from an ErrorOrNoticeResponse message. This
+    does NOT include things such as protocol parsing errors.
     """
 
-    def __init__(self, response: ErrorOrNoticeResponse, query: str = None):
+    def __init__(self, response: ErrorOrNoticeResponse, query: str | None = None):
         self.response = response
 
     def __str__(self) -> str:
@@ -364,20 +364,19 @@ class InvalidPasswordError(UnrecoverableDatabaseError):
     """
 
 
-def wrap_error(response: ErrorOrNoticeResponse, query: str = None) -> BaseDatabaseError:
+def wrap_error(response: ErrorOrNoticeResponse, query: str | None = None) -> BaseDatabaseError:
     """
-    Wraps a :class:`.ErrorOrNoticeResponse` in an exception. If a query produced the error in question, then
-    passing it as the ``query`` param can produce a prettier error.
+    Wraps a :class:`.ErrorOrNoticeResponse` in an exception. If a query produced the error in
+    question, then passing it as the ``query`` param can produce a prettier error.
     """
     # TODO: More codes
     if response.code == "28P01":
         return InvalidPasswordError(response, query)
 
-    else:
-        if response.recoverable:
-            return RecoverableDatabaseError(response, query)
-        else:
-            return UnrecoverableDatabaseError(response, query)
+    if response.recoverable:
+        return RecoverableDatabaseError(response, query)
+
+    return UnrecoverableDatabaseError(response, query)
 
 
 __all__ = (

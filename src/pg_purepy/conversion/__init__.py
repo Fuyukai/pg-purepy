@@ -1,10 +1,12 @@
 """
 Package containing the converterss for Python types to PostgreSQL types.
 """
+
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING, List
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.conversion.arrays import ArrayConverter
@@ -18,21 +20,27 @@ from pg_purepy.conversion.dt import (
     STATIC_DATE_CONVERTER,
     STATIC_DATEA_CONVERTER,
     STATIC_TIME_CONVERTER,
-    STATIC_TIMEA_CONVERTER,
     STATIC_TIMESTAMPNOTZ_CONVERTER,
     STATIC_TIMESTAMPNOTZA_CONVERTER,
     STATIC_TIMESTAMPTZ_CONVERTER,
     STATIC_TIMESTAMPTZA_CONVERTER,
 )
 from pg_purepy.conversion.enums import EnumConverter
-from pg_purepy.conversion.hstore import HStoreConverter
 
 if TYPE_CHECKING:
     from pg_purepy.protocol import SansIOClient
 
 
-def _make_array_converters(oids, cvs, **kwargs) -> List[Converter]:
-    return [ArrayConverter(oid, cv, **kwargs) for (oid, cv) in zip(oids, cvs)]
+def _make_array_converters(
+    oids: Sequence[int],
+    cvs: Sequence[Converter],
+    *,
+    quote_inner: bool = False,
+) -> list[Converter]:
+    return [
+        ArrayConverter(oid, cv, quote_inner=quote_inner)
+        for (oid, cv) in zip(oids, cvs, strict=True)
+    ]
 
 
 KNOWN_INT_OIDS = (20, 21, 23, 26, 27, 28, 29)
@@ -55,7 +63,7 @@ STATIC_BOOLEANA_CONVERTER = ArrayConverter(1000, STATIC_BOOLEAN_CONVERTER)
 STATIC_BYTES_CONVERTER = ByteaConverter()
 
 
-def apply_default_converters(protocol: SansIOClient):
+def apply_default_converters(protocol: SansIOClient) -> None:
     """
     Applies the default converter objects to a protocol.
     """

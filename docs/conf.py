@@ -13,16 +13,16 @@
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
-import pkg_resources
+from importlib.metadata import version as get_version
 
 # -- Project information -----------------------------------------------------
 
 project = "pg-purepy"
-copyright = "2021, Lura Skye"
+copyright = "2021-2023, Lura Skye"
 author = "Lura Skye"
 
 # The full version, including alpha/beta/rc tags
-release = pkg_resources.get_distribution("pg_purepy").version
+release = get_version("pg_purepy")
 
 
 # -- General configuration ---------------------------------------------------
@@ -34,7 +34,6 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx_autodoc_typehints",
-    "sphinxcontrib_trio",
     "sphinx_inline_tabs",
 ]
 

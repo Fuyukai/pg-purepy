@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Literal, assert_never
 
 import arrow
 
@@ -19,7 +19,7 @@ class TimestampTzConverter(Converter):
 
     oid = 1184
 
-    def from_postgres(self, context: ConversionContext, data: str) -> Union[arrow.Arrow, str]:
+    def from_postgres(self, context: ConversionContext, data: str) -> arrow.Arrow | str:
         if data == "infinity" or data == "-infinity":
             return data
 
@@ -27,14 +27,24 @@ class TimestampTzConverter(Converter):
         # So we provide the returned date in the server's timezone.
         return arrow.get(data, tzinfo=context.timezone)
 
-    def to_postgres(self, context: ConversionContext, data: Union[str, arrow.Arrow]) -> str:
-        if data == "infinity" or data == "-infinity":
-            return data
+    def to_postgres(
+        self, context: ConversionContext, data: Literal["infinity", "-infinity"] | arrow.Arrow
+    ) -> str:
+        # There's some really jank type stuff going on here, mypy can't narrow the type properly
+        # here?
 
-        # postgres just straight up accepts RFC 3339 format, even if it doesn't produce it.
-        # This will coincidentally work with vanilla datetimes, because `isoformat` is a method
-        # on both.
-        return data.isoformat()
+        match data:
+            case "infinity":
+                return "infinity"
+
+            case "-infinity":
+                return "-infinity"
+
+            case arrow.Arrow():
+                return data.isoformat()
+
+            case _:
+                assert_never(data)
 
 
 STATIC_TIMESTAMPTZ_CONVERTER = TimestampTzConverter()
@@ -48,7 +58,7 @@ class TimestampNoTzConverter(Converter):
 
     oid = 1114
 
-    def from_postgres(self, context: ConversionContext, data: str) -> Union[arrow.Arrow, str]:
+    def from_postgres(self, context: ConversionContext, data: str) -> arrow.Arrow | str:
         if data == "infinity" or data == "-infinity":
             return data
 

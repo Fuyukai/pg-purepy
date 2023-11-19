@@ -25,10 +25,9 @@ time, this provides an effective way of performinng multiple queries concurrentl
 Connecting
 ----------
 
-To create a connection pool, use :meth:`~.open_pool`.
+To create a connection pool, use :meth:`.open_pool`.
 
 .. automethod:: pg_purepy.pool.open_pool
-    :async-with: pool
 
 .. warning::
 

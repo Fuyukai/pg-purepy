@@ -18,7 +18,6 @@ Connecting
 In order to get anywhere, you need to actually connect to the server.
 
 .. autofunction:: pg_purepy.connection.open_database_connection
-    :async-with: conn
 
 .. autoclass:: pg_purepy.connection.AsyncPostgresConnection
     :members: ready, in_transaction, dead, connection_parameters, server_timezone
@@ -78,7 +77,6 @@ If you have large data sets, or want to query lazily for other reasons, then
 asynchronous context manager, returning a :class:`~.QueryResult`.
 
 .. automethod:: pg_purepy.connection.AsyncPostgresConnection.query
-    :async-with: query
 
 .. autoclass:: pg_purepy.connection.QueryResult
     :members:
@@ -197,11 +195,10 @@ it does supply a transaction helper which will automatically commit at the end o
 block, or rollback if an error happens.
 
 .. automethod:: pg_purepy.connection.AsyncPostgresConnection.with_transaction
-    :async-with:
+
 
 .. warning::
 
     This will NOT protect against different tasks from calling query functions inside your
     transaction. This would require overly complicated locking logic! Instead, wrap your acquisition
     of this inside a different lock, and guard all other transaction helpers with it.
-

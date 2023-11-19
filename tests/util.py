@@ -1,6 +1,6 @@
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager
 
 from pg_purepy import AsyncPostgresConnection, open_database_connection
 
@@ -10,7 +10,7 @@ POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "")  # lol!
 
 
 @asynccontextmanager
-async def open_connection() -> AsyncContextManager[AsyncPostgresConnection]:
+async def open_connection() -> AsyncGenerator[AsyncPostgresConnection, None]:
     async with open_database_connection(
         address_or_path=POSTGRES_ADDRESS, username=POSTGRES_USERNAME, password=POSTGRES_PASSWORD
     ) as conn:

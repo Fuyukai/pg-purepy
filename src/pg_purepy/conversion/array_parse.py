@@ -30,7 +30,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+# mypy: ignore-errors
+
 from enum import Enum
+from typing import Any
 
 
 class ArrayState(Enum):
@@ -40,7 +43,7 @@ class ArrayState(Enum):
     Out = 4
 
 
-def _parse_array(data, adapter):
+def _parse_array(data, adapter) -> list[Any]:
     state = ArrayState.Out
     stack = [[]]
     val = []

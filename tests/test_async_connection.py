@@ -1,9 +1,10 @@
+import warnings
+from contextlib import aclosing
+
 import anyio
 import pytest
 import trio.testing
 from anyio.lowlevel import checkpoint
-from async_generator import aclosing
-
 from pg_purepy import (
     CommandComplete,
     DataRow,
@@ -13,7 +14,8 @@ from pg_purepy import (
     RecoverableDatabaseError,
     RowDescription,
 )
-from pg_purepy.connection import QueryResult, open_database_connection
+from pg_purepy.connection import open_database_connection
+
 from tests.util import (
     POSTGRES_ADDRESS,
     POSTGRES_PASSWORD,
@@ -42,7 +44,7 @@ async def test_connection_with_invalid_password():
     with pytest.raises(InvalidPasswordError):
         async with open_database_connection(
             address_or_path=POSTGRES_ADDRESS, username=POSTGRES_USERNAME, password=""
-        ) as conn:
+        ):
             pass
 
 
@@ -56,7 +58,7 @@ async def test_needs_password():
         async with open_database_connection(
             address_or_path=POSTGRES_ADDRESS,
             username=POSTGRES_USERNAME,
-        ) as conn:
+        ):
             pass
 
 
@@ -118,6 +120,8 @@ async def test_query_with_positional_params():
 
     async with open_connection() as conn:
         result = await conn.fetch_one("select $1::int4;", 7)
+
+        assert result
         assert result.data[0] == 7
 
 
@@ -128,6 +132,8 @@ async def test_query_with_params():
 
     async with open_connection() as conn:
         row = await conn.fetch_one("select 1 where 'a' = :x;", x="a")
+
+        assert row
         assert row.data[0] == 1
 
 
@@ -153,7 +159,9 @@ async def test_multiple_queries_one_execute():
         assert len(results) == 6
         row1, row2 = results[1], results[4]
 
+        assert isinstance(row1, DataRow)
         assert row1.data[0] == 1
+        assert isinstance(row2, DataRow)
         assert row2.data[0] == 2
 
 
@@ -188,6 +196,7 @@ async def test_transaction_helper_normal():
             name="test_transaction_helper_normal",
         )
 
+        assert result
         assert result.data[0] == 1
 
 
@@ -211,6 +220,7 @@ async def test_transaction_helper_error():
             name="test_transaction_helper_error",
         )
 
+        assert result
         assert result.data[0] == 0
 
 
@@ -238,6 +248,7 @@ async def test_execute_prepared_statement_insert():
         assert rows_params == 1
 
         count = await conn.fetch_one("select count(*) from test_epsi;")
+        assert count
         assert count.data[0] == 2
 
         rows = await conn.fetch("select * from test_epsi;")
@@ -259,6 +270,7 @@ async def test_insert():
         row_count = await conn.execute("insert into test_insert(foo) values (:one);", one="test")
         assert row_count == 1
         result = await conn.fetch_one("select * from test_insert;")
+        assert result
         assert result.data == [1, "test"]
 
 
@@ -274,6 +286,7 @@ async def test_unparameterised_insert():
         row_count = await conn.execute("insert into test_insert2(foo) values ('test');")
         assert row_count == 1
         result = await conn.fetch_one("select * from test_insert2;")
+        assert result
         assert result.data == [1, "test"]
 
 
@@ -288,11 +301,13 @@ async def test_update():
         )
         await conn.execute("insert into test_update(foo) values (:one);", one="test")
         pre_update = await conn.fetch_one("select * from test_update;")
+        assert pre_update
         assert pre_update.data == [1, "test"]
 
         row_count = await conn.execute("update test_update set foo = :one;", one="test_2")
         assert row_count == 1
         post_update = await conn.fetch_one("select * from test_update;")
+        assert post_update
         assert post_update.data == [1, "test_2"]
 
 
@@ -329,10 +344,8 @@ async def test_notices():
                 "DO language plpgsql $$ BEGIN RAISE WARNING 'hello, world!'; END $$;"
             )
 
-        with pytest.warns(None) as w:
+        with warnings.catch_warnings():
             await conn.execute("DO language plpgsql $$ BEGIN RAISE NOTICE 'hello, world!'; END $$;")
-
-        assert not w
 
 
 ## Runtime Configuration ##
@@ -348,6 +361,7 @@ async def test_set_parameter():
         assert conn.connection_parameters["application_name"] == "test"
 
         row = await conn.fetch_one("show application_name;")
+        assert row
         assert row.data[0] == conn.connection_parameters["application_name"]
 
 
@@ -357,7 +371,7 @@ async def test_set_illegal_parameter():
     """
 
     async with open_connection() as conn:
-        with pytest.raises(ProtocolParseError) as e:
+        with pytest.raises(ProtocolParseError):
             await conn.execute("set DateStyle to 'Postgres, MDY';")
 
 
@@ -367,16 +381,15 @@ async def test_get_cached_row_count(anyio_backend):
     Tests that getting the cached row count works.
     """
 
-    async with open_connection() as conn:
-        async with conn.query("select 1;") as query:  # type: QueryResult
-            rows = [r async for r in query]
-            assert rows[0].data[0] == 1
+    async with open_connection() as conn, conn.query("select 1;") as query:
+        rows = [r async for r in query]
+        assert rows[0].data[0] == 1
 
-            assert await query.row_count() == 1
+        assert await query.row_count() == 1
 
-            if anyio_backend == "trio":
-                with trio.testing.assert_checkpoints():
-                    assert await query.row_count() == 1
+        if anyio_backend == "trio":
+            with trio.testing.assert_checkpoints():
+                assert await query.row_count() == 1
 
 
 async def test_insert_into_not_null():
@@ -414,7 +427,7 @@ async def test_transaction_when_cancelled():
     async with open_connection() as conn:
         with anyio.CancelScope() as scope:
             async with conn.with_transaction():
-                scope.cancel()  # noqa
+                scope.cancel()
                 await checkpoint()
 
         # synchronise
