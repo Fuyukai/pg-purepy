@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pg-purepy"
-version = "0.9.1"
+version = "0.9.2"
 description = "A pure-Python anyio-based PostgreSQL adapter."
 authors = ["Lura Skye <l@veriny.tf>"]
 license = "LGPL-3.0-or-later"
