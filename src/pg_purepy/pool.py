@@ -6,23 +6,23 @@ import struct
 import warnings
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from functools import partial
+from ssl import SSLContext
 from types import TracebackType
 from typing import Any, Literal, Self
 
 import anyio
 import attr
-from anyio.abc import SocketStream, TaskGroup
+from anyio.abc import ByteStream, TaskGroup
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
-from anyio.streams.tls import TLSStream
 
-from pg_purepy import ArrayConverter
 from pg_purepy.connection import (
     AsyncPostgresConnection,
     RollbackTimeoutError,
     _open_connection,
     _open_socket,
 )
-from pg_purepy.conversion.abc import Converter
+from pg_purepy.conversion import ArrayConverter, Converter
 from pg_purepy.exc import ConnectionForciblyKilledError, ConnectionInTransactionWarning
 from pg_purepy.messages import (
     DataRow,
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 @attr.s(slots=True)
 class OpenedConnection:
-    sock: SocketStream | TLSStream = attr.ib()
+    sock: ByteStream = attr.ib()
     conn: AsyncPostgresConnection = attr.ib()
 
 
@@ -43,7 +43,8 @@ class PooledDatabaseInterface:
     Connection pool based PostgreSQL interface.
     """
 
-    def __init__(self, count: int, nursery: TaskGroup, conn_args: Any, conn_kwargs: Any):
+    def __init__(self, count: int, nursery: TaskGroup, conn_fn: Callable[[], Awaitable[tuple[ByteStream, AsyncPostgresConnection]]]):
+        self._create_connection = conn_fn
         self._connection_count = count
 
         self._write: MemoryObjectSendStream[OpenedConnection]
@@ -52,9 +53,6 @@ class PooledDatabaseInterface:
         self._write, self._read = anyio.create_memory_object_stream[OpenedConnection](
             max_buffer_size=count
         )
-
-        self._conn_args = conn_args
-        self._conn_kwargs = conn_kwargs
 
         # list of converters used when opening a new connection
         self._converters: set[Converter] = set()
@@ -110,7 +108,7 @@ class PooledDatabaseInterface:
             await sock.send(data)
 
     async def _open_new_connection(self) -> None:
-        sock, conn = await _open_connection(*self._conn_args, **self._conn_kwargs)
+        sock, conn = await self._create_connection()
         self._raw_connections.add(conn)
         for converter in self._converters:
             conn.add_converter(converter=converter)
@@ -400,7 +398,14 @@ def determine_conn_count() -> int:
 
 @asynccontextmanager
 async def open_pool(
-    connection_count: int | None = None, *args: Any, **kwargs: Any
+    address_or_path: str | os.PathLike[str],
+    username: str,
+    *,
+    connection_count: int | None = None,
+    port: int = 5432,
+    password: str | None = None,
+    database: str | None = None,
+    ssl_context: SSLContext | None = None,
 ) -> AsyncGenerator[PooledDatabaseInterface, None]:
     """
     Opens a new connection pool to a PostgreSQL server. This is an asynchronous context manager.
@@ -419,8 +424,18 @@ async def open_pool(
     if connection_count is None:
         connection_count = determine_conn_count()
 
+    conn_fn = partial(
+        _open_connection,
+        address_or_path=address_or_path,
+        username=username,
+        port=port,
+        password=password,
+        database=database,
+        ssl_context=ssl_context,
+    )
+
     async with anyio.create_task_group() as tg, PooledDatabaseInterface(
-        connection_count, tg, args, kwargs
+        connection_count, tg, conn_fn=conn_fn,
     ) as pool:
         await pool._start(connection_count)
 

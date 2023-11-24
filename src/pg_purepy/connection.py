@@ -576,7 +576,7 @@ async def _open_connection(
     password: str | None = None,
     database: str | None = None,
     ssl_context: SSLContext | None = None,
-) -> tuple[SocketStream | TLSStream, AsyncPostgresConnection]:
+) -> tuple[ByteStream, AsyncPostgresConnection]:
     """
     Actual implementation of connection opening.
     """

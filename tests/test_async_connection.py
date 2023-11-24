@@ -5,16 +5,15 @@ import anyio
 import pytest
 import trio.testing
 from anyio.lowlevel import checkpoint
-from pg_purepy import (
+from pg_purepy.connection import open_database_connection
+from pg_purepy.exc import MissingPasswordError, ProtocolParseError
+from pg_purepy.messages import (
     CommandComplete,
     DataRow,
     InvalidPasswordError,
-    MissingPasswordError,
-    ProtocolParseError,
     RecoverableDatabaseError,
     RowDescription,
 )
-from pg_purepy.connection import open_database_connection
 
 from tests.util import (
     POSTGRES_ADDRESS,

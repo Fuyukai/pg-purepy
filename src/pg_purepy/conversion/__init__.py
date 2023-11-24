@@ -8,13 +8,13 @@ import itertools
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from pg_purepy.conversion.abc import Converter
-from pg_purepy.conversion.arrays import ArrayConverter
+from pg_purepy.conversion.abc import Converter as Converter
+from pg_purepy.conversion.arrays import ArrayConverter as ArrayConverter
 from pg_purepy.conversion.basics import (
-    BoolConverter,
-    ByteaConverter,
-    SimpleFunctionConverter,
-    TextConverter,
+    BoolConverter as BoolConverter,
+    ByteaConverter as ByteaConverter,
+    SimpleFunctionConverter as SimpleFunctionConverter,
+    TextConverter as TextConverter,
 )
 from pg_purepy.conversion.dt import (
     STATIC_DATE_CONVERTER,
