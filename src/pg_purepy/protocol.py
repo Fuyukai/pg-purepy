@@ -48,7 +48,7 @@ from pg_purepy.messages import (
     SASLComplete,
     SASLContinue,
 )
-from pg_purepy.util import Buffer, pack_strings
+from pg_purepy.util import Buffer, LoggerWithTrace, pack_strings
 
 # static messages with no params
 FLUSH_MESSAGE = b"H\x00\x00\x00\x04"
@@ -139,7 +139,7 @@ def unrecoverable_error(
                 error.recoverable = True
             else:
                 self.state = ProtocolState.UNRECOVERABLE_ERROR
-                self._logger.fatal(f"Unrecoverable error: {error.severity}: {error.message}")
+                self._logger.critical(f"Unrecoverable error: {error.severity}: {error.message}")
 
             return error
 
@@ -356,7 +356,7 @@ class SansIOClient:
         # data, we're currently processing a partial packet
         self._processing_partial_packet = False
 
-        self._logger = logging.getLogger(logger_name)
+        self._logger = LoggerWithTrace(logger=logging.getLogger(logger_name))
 
         apply_default_converters(self)
 
@@ -370,7 +370,7 @@ class SansIOClient:
     @state.setter
     def state(self, value: ProtocolState) -> None:
         before = self._state
-        self._logger.trace(f"Protocol changing state from {before} to {value}")  # type: ignore
+        self._logger.trace(f"Protocol changing state from {before} to {value}")
         self._state = value
 
     @property
@@ -441,7 +441,7 @@ class SansIOClient:
         else:
             self.connection_params[name] = value
 
-        self._logger.trace(f"Parameter status: {name} -> {value}")  # type: ignore
+        self._logger.trace(f"Parameter status: {name} -> {value}")
 
         return ParameterStatus(name, value)
 
@@ -489,7 +489,7 @@ class SansIOClient:
         Decodes the row description message.
         """
         field_count = body.read_short()
-        self._logger.trace(f"Got {field_count} fields in this row description.")  # type: ignore
+        self._logger.trace(f"Got {field_count} fields in this row description.")
         fields = []
 
         for _i in range(0, field_count):
@@ -716,7 +716,7 @@ class SansIOClient:
         """
         row_desc = self._decode_row_description(body)
         self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_ROW_DESCRIPTION
-        self._logger.trace(f"Incoming data has {len(row_desc.columns)} columns.")  # type: ignore
+        self._logger.trace(f"Incoming data has {len(row_desc.columns)} columns.")
         self._last_row_description = row_desc
         return row_desc
 
@@ -730,7 +730,7 @@ class SansIOClient:
             # commands such as Begin or Rollback don't return rows, thus don't return a
             # RowDescription.
             self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE
-            self._logger.trace("Query returned no rows")  # type: ignore
+            self._logger.trace("Query returned no rows")
             return self._decode_command_complete(body)
 
         if code == BackendMessageCode.ROW_DESCRIPTION:
@@ -926,7 +926,7 @@ class SansIOClient:
         assert self._state != ProtocolState.UNRECOVERABLE_ERROR, "state is unrecoverable error"
         assert self._state != ProtocolState.TERMINATED, "state is terminated"
 
-        self._logger.trace(f"Protocol: Received {len(data)} bytes")  # type: ignore
+        self._logger.trace(f"Protocol: Received {len(data)} bytes")
         self._buffer += data
 
     def do_startup(self) -> bytes:
@@ -1114,7 +1114,7 @@ class SansIOClient:
         ):
             raise IllegalStateError("The protocol is broken and won't work.")
 
-        self._logger.trace(f"Called next_event(), state is {self.state.name}")  # type: ignore
+        self._logger.trace(f"Called next_event(), state is {self.state.name}")
 
         if len(self._buffer) == 0:
             return NEED_DATA
@@ -1150,7 +1150,7 @@ class SansIOClient:
             message_data = self._buffer[5 : size + 5]
 
             if len(message_data) < size:
-                self._logger.trace(  # type: ignore
+                self._logger.trace(
                     f"Received truncated packet of {len(message_data)} size, need {size} bytes"
                 )
                 # not enough data yet.
@@ -1167,7 +1167,7 @@ class SansIOClient:
                 self._buffer = self._buffer[size + 5:]
 
         code = BackendMessageCode(code)
-        self._logger.trace(f"Got incoming message {code!r}")  # type: ignore
+        self._logger.trace(f"Got incoming message {code!r}")
 
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")
@@ -1212,12 +1212,13 @@ class SansIOClient:
         ## Authentication States ##
         if self.state == ProtocolState.CLEARTEXT_STARTUP:
             self._check_password()
-            self._logger.trace("Received cleartext password authentication request.")  # type: ignore
+            self._logger.trace("Received cleartext password authentication request.")
 
             code = FrontendMessageCode.PASSWORD
 
             # type ignore is fine, ``_check_password`` verifies itt.
-            packet_body += self._password.encode(encoding="ascii")  # type: ignore
+            assert self._password
+            packet_body += self._password.encode(encoding="ascii")
             self.state = ProtocolState.CLEARTEXT_SENT
 
         elif self.state == ProtocolState.MD5_STARTUP:

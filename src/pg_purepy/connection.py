@@ -48,7 +48,7 @@ from pg_purepy.protocol import (
     check_if_tls_accepted,
 )
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 

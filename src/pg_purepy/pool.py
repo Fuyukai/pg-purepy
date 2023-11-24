@@ -29,7 +29,7 @@ from pg_purepy.messages import (
     RecoverableDatabaseError,
 )
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 @attr.s(slots=True)
@@ -43,7 +43,12 @@ class PooledDatabaseInterface:
     Connection pool based PostgreSQL interface.
     """
 
-    def __init__(self, count: int, nursery: TaskGroup, conn_fn: Callable[[], Awaitable[tuple[ByteStream, AsyncPostgresConnection]]]):
+    def __init__(
+        self,
+        count: int,
+        nursery: TaskGroup,
+        conn_fn: Callable[[], Awaitable[tuple[ByteStream, AsyncPostgresConnection]]],
+    ):
         self._create_connection = conn_fn
         self._connection_count = count
 
@@ -435,7 +440,9 @@ async def open_pool(
     )
 
     async with anyio.create_task_group() as tg, PooledDatabaseInterface(
-        connection_count, tg, conn_fn=conn_fn,
+        connection_count,
+        tg,
+        conn_fn=conn_fn,
     ) as pool:
         await pool._start(connection_count)
 

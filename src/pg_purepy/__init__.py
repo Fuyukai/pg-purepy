@@ -29,19 +29,10 @@ from pg_purepy.messages import (
     UnrecoverableDatabaseError as UnrecoverableDatabaseError,
 )
 from pg_purepy.pool import (
-    PooledDatabaseInterface as PooledDatabaseInterface, 
+    PooledDatabaseInterface as PooledDatabaseInterface,
     open_pool as open_pool,
 )
 
-if not hasattr(logging.Logger, "trace"):
-    # TRACE_LEVEL = 5
 
-    logging.addLevelName(5, "TRACE")
-
-    def trace(self, message, *args, **kws):
-        if self.isEnabledFor(5):
-            self._log(5, message, args, **kws)
-
-    logging.Logger.trace = trace  # type: ignore
-
-    del trace
+logging.addLevelName(5, "TRACE")
+del logging
