@@ -32,6 +32,7 @@ from pg_purepy.pool import (
     PooledDatabaseInterface as PooledDatabaseInterface,
     open_pool as open_pool,
 )
+from pg_purepy.protocol import SansIOClient as SansIOClient
 
 
 logging.addLevelName(5, "TRACE")

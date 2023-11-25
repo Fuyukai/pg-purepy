@@ -6,7 +6,16 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Sequence
+from functools import partial
 from typing import TYPE_CHECKING
+
+try:
+    from ujson import dumps, loads as json_loads
+
+    json_dumps = partial(dumps, ensure_ascii=False)
+except ModuleNotFoundError:
+    from json import dumps as json_dumps, loads as json_loads
+
 
 from pg_purepy.conversion.abc import Converter as Converter
 from pg_purepy.conversion.arrays import ArrayConverter as ArrayConverter
@@ -58,6 +67,11 @@ FLOAT_CONVERTERS = [SimpleFunctionConverter(oid, float, str) for oid in KNOWN_FL
 KNOWN_FLOATA_OIDS = (1021, 1022)
 FLOATA_CONVERTERS = _make_array_converters(KNOWN_FLOATA_OIDS, FLOAT_CONVERTERS)
 
+KNOWN_JSON_OIDS = (114, 3802)
+JSON_CONVERTERS = [SimpleFunctionConverter(oid, json_loads, json_dumps) for oid in KNOWN_JSON_OIDS]
+KNOWN_JSONA_OIDS = (199, 3807)
+JSONA_CONVERTERS = _make_array_converters(KNOWN_JSONA_OIDS, JSON_CONVERTERS)
+
 STATIC_BOOLEAN_CONVERTER = BoolConverter()
 STATIC_BOOLEANA_CONVERTER = ArrayConverter(1000, STATIC_BOOLEAN_CONVERTER)
 STATIC_BYTES_CONVERTER = ByteaConverter()
@@ -73,6 +87,7 @@ def apply_default_converters(protocol: SansIOClient) -> None:
         INT_CONVERTERS, INTA_CONVERTERS,
         STR_CONVERTERS, STRA_CONVERTERS,
         FLOAT_CONVERTERS, FLOATA_CONVERTERS,
+        JSON_CONVERTERS, JSONA_CONVERTERS,
     ):
         protocol.add_converter(cv)
     # fmt: on

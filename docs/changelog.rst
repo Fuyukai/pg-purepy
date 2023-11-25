@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.9.4 (2023-11-25)
+------------------
+
+- Add support for the JSON and JSONB types to the default converters.
+
 0.9.0 (2023-11-19)
 ------------------
 

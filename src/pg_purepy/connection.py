@@ -297,7 +297,7 @@ class AsyncPostgresConnection:
                 await self._write(data)
             else:
                 if not isinstance(query, PreparedStatementInfo):
-                    real_query, new_params = convert_paramstyle(query, kwargs)  # type: ignore
+                    real_query, new_params = convert_paramstyle(query, kwargs)
                     params = params + new_params
                     info = await self.create_prepared_statement(name="", query=real_query)
                 else:

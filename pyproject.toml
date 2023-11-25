@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pg-purepy"
-version = "0.9.3"
+version = "0.9.4"
 description = "A pure-Python anyio-based PostgreSQL adapter."
 authors = ["Lura Skye <l@veriny.tf>"]
 license = "LGPL-3.0-or-later"
@@ -34,6 +34,7 @@ isort = ">=5.12.0"
 pytest-cov = ">=4.1.0"
 mypy = ">=1.7.0"
 ruff = ">=0.1.6"
+ujson = "^5.8.0"
 
 [tool.poetry.extras]
 docs = ["Sphinx", "sphinxcontrib-trio", "sphinx-autodoc-typehints", "sphinx-rtd-theme",
