@@ -25,7 +25,7 @@ from anyio.streams.tls import TLSStream
 
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.dbapi import convert_paramstyle
-from pg_purepy.exc import IllegalStateError, PostgresqlError
+from pg_purepy.exc import IllegalStateError, MissingRowError, PostgresqlError
 from pg_purepy.messages import (
     BackendKeyData,
     BaseDatabaseError,
@@ -429,9 +429,11 @@ class AsyncPostgresConnection:
         query: str | PreparedStatementInfo,
         *params: Any,
         **kwargs: Any,
-    ) -> DataRow | None:
+    ) -> DataRow:
         """
         Like :meth:`.fetch`, but only fetches one row.
+
+        :raises MissingRowError: If there's no row in the result.
         """
 
         row = await self.fetch(query, *params, **kwargs)
@@ -439,7 +441,7 @@ class AsyncPostgresConnection:
         try:
             return row[0]
         except IndexError:
-            return None
+            raise MissingRowError() from None
 
     async def execute(
         self,

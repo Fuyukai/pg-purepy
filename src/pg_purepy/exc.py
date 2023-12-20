@@ -55,3 +55,9 @@ class ConnectionInTransactionWarning(ResourceWarning):
     """
     Raised when a connection is returned to a connection pool whilst it is still in a transaction.
     """
+
+
+class MissingRowError(ValueError):
+    """
+    Raised when there's no row during a ``fetch_one`` operation.
+    """

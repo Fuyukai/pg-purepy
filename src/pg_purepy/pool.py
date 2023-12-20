@@ -327,7 +327,7 @@ class PooledDatabaseInterface:
         async with self._checkout_connection() as conn:
             return await conn.fetch(query, *params, **kwargs)
 
-    async def fetch_one(self, query: str, *params: Any, **kwargs: Any) -> DataRow | None:
+    async def fetch_one(self, query: str, *params: Any, **kwargs: Any) -> DataRow:
         """
         Like :meth:`.fetch`, but only returns one row. See
         :meth:`.AsyncPostgresConnection.fetch_one` for more information.

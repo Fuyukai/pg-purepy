@@ -1,6 +1,17 @@
 Changelog
 =========
 
+0.9.5 (2023-12-20)
+------------------
+
+- Make :func:`.AsyncPostgresConnection.fetch_one` raise an error in the event of an empty row,
+  instead of returning an optional. 
+
+  This results in a more ergonomic API (as you don't need to check for None constantly) with the 
+  side effect of requiring potentially more error handling. This is the same approach used in
+  the `sqlx <https://docs.rs/sqlx-core/0.7.3/src/sqlx_core/executor.rs.html#115-121>`_ library,
+  for one example.
+
 0.9.4 (2023-11-25)
 ------------------
 

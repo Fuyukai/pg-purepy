@@ -20,6 +20,7 @@ from pg_purepy.exc import (
     UnknownMessageError as UnknownMessageError,
     IllegalStateError as IllegalStateError,
     ConnectionInTransactionWarning as ConnectionInTransactionWarning,
+    MissingRowError as MissingRowError,
 )
 from pg_purepy.messages import (
     ErrorOrNoticeResponse as ErrorOrNoticeResponse,

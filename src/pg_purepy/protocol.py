@@ -1164,7 +1164,7 @@ class SansIOClient:
             else:  # noqa: RET505
                 # yes enough data, set the buffer to the data after the size bytes for future
                 # processing
-                self._buffer = self._buffer[size + 5:]
+                self._buffer = self._buffer[size + 5 :]
 
         code = BackendMessageCode(code)
         self._logger.trace(f"Got incoming message {code!r}")

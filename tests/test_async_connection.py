@@ -6,7 +6,7 @@ import pytest
 import trio.testing
 from anyio.lowlevel import checkpoint
 from pg_purepy.connection import open_database_connection
-from pg_purepy.exc import MissingPasswordError, ProtocolParseError
+from pg_purepy.exc import MissingPasswordError, MissingRowError, ProtocolParseError
 from pg_purepy.messages import (
     CommandComplete,
     DataRow,
@@ -97,7 +97,6 @@ async def test_query_after_error():
         assert e1.value.response.code == "42P01"
 
         row_1 = await conn.fetch_one("select 1;")
-        assert isinstance(row_1, DataRow)
         assert len(row_1.data) == 1
         assert row_1.data[0] == 1
 
@@ -107,7 +106,6 @@ async def test_query_after_error():
         assert e2.value.response.code == "42P01"
 
         row_2 = await conn.fetch_one("select 2 where 'a' = :a;", a="a")
-        assert isinstance(row_2, DataRow)
         assert len(row_2.data) == 1
         assert row_2.data[0] == 2
 
@@ -120,7 +118,6 @@ async def test_query_with_positional_params():
     async with open_connection() as conn:
         result = await conn.fetch_one("select $1::int4;", 7)
 
-        assert result
         assert result.data[0] == 7
 
 
@@ -131,8 +128,6 @@ async def test_query_with_params():
 
     async with open_connection() as conn:
         row = await conn.fetch_one("select 1 where 'a' = :x;", x="a")
-
-        assert row
         assert row.data[0] == 1
 
 
@@ -162,6 +157,17 @@ async def test_multiple_queries_one_execute():
         assert row1.data[0] == 1
         assert isinstance(row2, DataRow)
         assert row2.data[0] == 2
+
+
+async def test_empty_select_raises():
+    """
+    Tests that running ``fetch_one`` when the table has no rows raises an error.
+    """
+
+    async with open_connection() as conn:
+        with pytest.raises(MissingRowError):
+            await conn.execute("create temporary table empty (_ int primary key);")
+            await conn.fetch_one("select * from empty;")
 
 
 ## Transaction helper ##
@@ -360,7 +366,6 @@ async def test_set_parameter():
         assert conn.connection_parameters["application_name"] == "test"
 
         row = await conn.fetch_one("show application_name;")
-        assert row
         assert row.data[0] == conn.connection_parameters["application_name"]
 
 
