@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import enum
 import functools
-import logging
 import struct
 from collections.abc import Callable, Collection, Mapping
 from datetime import tzinfo
@@ -15,7 +14,9 @@ from itertools import count as it_count
 from typing import Any
 
 import dateutil.tz
+import structlog
 from scramp import ScramClient
+from structlog.stdlib import BoundLogger
 
 from pg_purepy.conversion import apply_default_converters
 from pg_purepy.conversion.abc import ConversionContext, Converter
@@ -48,7 +49,7 @@ from pg_purepy.messages import (
     SASLComplete,
     SASLContinue,
 )
-from pg_purepy.util import Buffer, LoggerWithTrace, pack_strings
+from pg_purepy.util import Buffer, pack_strings
 
 # static messages with no params
 FLUSH_MESSAGE = b"H\x00\x00\x00\x04"
@@ -121,7 +122,7 @@ _NO_HANDLE = object()
 
 
 def unrecoverable_error(
-    fn: Callable[[SansIOClient, BackendMessageCode, Buffer], PostgresMessage]
+    fn: Callable[[SansIOClient, BackendMessageCode, Buffer], PostgresMessage],
 ) -> Callable[[SansIOClient, BackendMessageCode, Buffer], PostgresMessage]:
     """
     Decorator that will automatically set the state to an unrecoverable error if an error response
@@ -139,7 +140,9 @@ def unrecoverable_error(
                 error.recoverable = True
             else:
                 self.state = ProtocolState.UNRECOVERABLE_ERROR
-                self._logger.critical(f"Unrecoverable error: {error.severity}: {error.message}")
+                self._logger.critical(
+                    "Unrecoverable error", severity=error.severity, message=error.message
+                )
 
             return error
 
@@ -334,8 +337,8 @@ class SansIOClient:
         self.application_name: str = application_name
         self._password = password
 
-        # the state of the protocol machine.
-        self._state: ProtocolState = ProtocolState.STARTUP
+        #: The state of the protocol state machine.
+        self.state: ProtocolState = ProtocolState.STARTUP
 
         ## authentication
         # current authentication request. used by various auth functions
@@ -356,29 +359,17 @@ class SansIOClient:
         # data, we're currently processing a partial packet
         self._processing_partial_packet = False
 
-        self._logger = LoggerWithTrace(logger=logging.getLogger(logger_name))
+        self._logger: BoundLogger = structlog.get_logger(name=__name__)
+        self._logger = self._logger.bind(username=username, database=database)
 
         apply_default_converters(self)
-
-    @property
-    def state(self) -> ProtocolState:
-        """
-        The current state of this connection.
-        """
-        return self._state
-
-    @state.setter
-    def state(self, value: ProtocolState) -> None:
-        before = self._state
-        self._logger.trace(f"Protocol changing state from {before} to {value}")
-        self._state = value
 
     @property
     def ready(self) -> bool:
         """
         If the server is ready for another query.
         """
-        return self._state == ProtocolState.READY_FOR_QUERY
+        return self.state == ProtocolState.READY_FOR_QUERY
 
     @property
     def encoding(self) -> str:
@@ -406,7 +397,7 @@ class SansIOClient:
         """
         If the protocol is "dead", i.e. unusable via an error or terminated.
         """
-        return self._state in {ProtocolState.UNRECOVERABLE_ERROR, ProtocolState.TERMINATED}
+        return self.state in {ProtocolState.UNRECOVERABLE_ERROR, ProtocolState.TERMINATED}
 
     ## Internal API ##
     def _check_password(self) -> None:
@@ -441,7 +432,7 @@ class SansIOClient:
         else:
             self.connection_params[name] = value
 
-        self._logger.trace(f"Parameter status: {name} -> {value}")
+        self._logger.debug("Set parameter status", parameter=name, value=value)
 
         return ParameterStatus(name, value)
 
@@ -476,9 +467,7 @@ class SansIOClient:
 
             str_field = body.read_cstring(encoding="ascii")
             if code == ErrorResponseFieldType.UNKNOWN:
-                self._logger.warning(
-                    f"Encountered unknown field type in error with value {str_field}"
-                )
+                self._logger.warning("Unknown field type in error", field=str_field)
             else:
                 kwargs[code.name.lower()] = str_field
 
@@ -489,7 +478,6 @@ class SansIOClient:
         Decodes the row description message.
         """
         field_count = body.read_short()
-        self._logger.trace(f"Got {field_count} fields in this row description.")
         fields = []
 
         for _i in range(0, field_count):
@@ -500,7 +488,7 @@ class SansIOClient:
 
             if type_oid not in self.converters:
                 if self._ignore_unknown_types:
-                    self._logger.warning(f"Unknown type OID: {type_oid}")
+                    self._logger.warning("Unknown type OID", oid=type_oid)
                 else:
                     raise ProtocolParseError(f"Unknown type OID: {type_oid}")
 
@@ -716,7 +704,6 @@ class SansIOClient:
         """
         row_desc = self._decode_row_description(body)
         self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_ROW_DESCRIPTION
-        self._logger.trace(f"Incoming data has {len(row_desc.columns)} columns.")
         self._last_row_description = row_desc
         return row_desc
 
@@ -730,7 +717,6 @@ class SansIOClient:
             # commands such as Begin or Rollback don't return rows, thus don't return a
             # RowDescription.
             self.state = ProtocolState.SIMPLE_QUERY_RECEIVED_COMMAND_COMPLETE
-            self._logger.trace("Query returned no rows")
             return self._decode_command_complete(body)
 
         if code == BackendMessageCode.ROW_DESCRIPTION:
@@ -740,7 +726,9 @@ class SansIOClient:
             # this is a recoverable error, and simply moves onto the ReadyForQuery message.
             self.state = ProtocolState.RECOVERABLE_ERROR
             error = self._decode_error_response(body, recoverable=True, notice=False)
-            self._logger.warning(f"Error during query: {error.severity}: {error.message}")
+            self._logger.warning(
+                "Recoverable error during query", severity=error.severity, message=error.message
+            )
             return error
 
         raise UnknownMessageError(f"Expected RowDescription, got {code!r}")
@@ -923,10 +911,9 @@ class SansIOClient:
         """
         # these are assertions so that ``python -O`` optimises them out. its a bug to do anything
         # once the protocol is in UNRECOVERABLE_ERROR anyway.
-        assert self._state != ProtocolState.UNRECOVERABLE_ERROR, "state is unrecoverable error"
-        assert self._state != ProtocolState.TERMINATED, "state is terminated"
+        assert self.state != ProtocolState.UNRECOVERABLE_ERROR, "state is unrecoverable error"
+        assert self.state != ProtocolState.TERMINATED, "state is terminated"
 
-        self._logger.trace(f"Protocol: Received {len(data)} bytes")
         self._buffer += data
 
     def do_startup(self) -> bytes:
@@ -935,7 +922,7 @@ class SansIOClient:
 
         :return: A startup message, that should be sent to PostgreSQL.
         """
-        if self._state != ProtocolState.STARTUP:
+        if self.state != ProtocolState.STARTUP:
             raise IllegalStateError("Can't do startup outside of the startup state")
 
         packet_body = struct.pack("!i", (self.PROTOCOL_MAJOR << 16) | self.PROTOCOL_MINOR)
@@ -962,7 +949,7 @@ class SansIOClient:
         """
         Performs a simple (static) query. This query cannot have any dynamic parameters.
         """
-        if self._state != ProtocolState.READY_FOR_QUERY:
+        if self.state != ProtocolState.READY_FOR_QUERY:
             raise IllegalStateError("The server is not ready for queries")
 
         packet_body = pack_strings(query_text, encoding=self.encoding)
@@ -980,7 +967,7 @@ class SansIOClient:
         # TIL: You can do Parse, then Describe, then Flush, and get all the messages back at once.
         # This saves a Flush and a Sync round trip.
 
-        if self._state != ProtocolState.READY_FOR_QUERY:
+        if self.state != ProtocolState.READY_FOR_QUERY:
             raise IllegalStateError("The server is not ready for queries")
 
         ## Parse
@@ -1114,8 +1101,6 @@ class SansIOClient:
         ):
             raise IllegalStateError("The protocol is broken and won't work.")
 
-        self._logger.trace(f"Called next_event(), state is {self.state.name}")
-
         if len(self._buffer) == 0:
             return NEED_DATA
 
@@ -1150,9 +1135,6 @@ class SansIOClient:
             message_data = self._buffer[5 : size + 5]
 
             if len(message_data) < size:
-                self._logger.trace(
-                    f"Received truncated packet of {len(message_data)} size, need {size} bytes"
-                )
                 # not enough data yet.
                 self._processing_partial_packet = True
                 self._current_packet_buffer = message_data
@@ -1167,7 +1149,7 @@ class SansIOClient:
                 self._buffer = self._buffer[size + 5 :]
 
         code = BackendMessageCode(code)
-        self._logger.trace(f"Got incoming message {code!r}")
+        self._logger.debug("Incoming protocol message", code=code)
 
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")
@@ -1212,7 +1194,6 @@ class SansIOClient:
         ## Authentication States ##
         if self.state == ProtocolState.CLEARTEXT_STARTUP:
             self._check_password()
-            self._logger.trace("Received cleartext password authentication request.")
 
             code = FrontendMessageCode.PASSWORD
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import struct
 import warnings
@@ -13,6 +12,7 @@ from typing import Any, Literal, Self
 
 import anyio
 import attr
+import structlog
 from anyio.abc import ByteStream, TaskGroup
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
@@ -29,7 +29,7 @@ from pg_purepy.messages import (
     RecoverableDatabaseError,
 )
 
-logger: logging.Logger = logging.getLogger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(name=__name__)
 
 
 @attr.s(slots=True)
@@ -68,7 +68,7 @@ class PooledDatabaseInterface:
         self._nursery = nursery
 
     async def _start(self, count: int) -> None:
-        logger.debug(f"Opening {count} connections to the database.")
+        logger.debug("Opening pooled connections", count=count)
 
         for _ in range(0, count):
             await self._open_new_connection()
@@ -103,7 +103,7 @@ class PooledDatabaseInterface:
         Cancels the query running on this connection.
         """
 
-        logger.debug(f"Cancelling query running on #{conn}")
+        logger.debug("Cancelling query", pid=conn._pid)
 
         sock = await _open_socket(conn._addr, port=conn._port, ssl_context=conn._ssl_context)
 
@@ -217,11 +217,9 @@ class PooledDatabaseInterface:
         Checks out a single connection from the connection pool.
         """
 
-        logger.debug("Checking out new connection from the pool...")
         checkout = await self._read.receive()
         logger.debug(
-            "Connection acquired, current unused pool size: "
-            f"{self._read.statistics().current_buffer_used}"
+            "Connection acquired", connections_available=self._read.statistics().current_buffer_used
         )
 
         if checkout.conn.in_transaction:
@@ -233,7 +231,6 @@ class PooledDatabaseInterface:
 
         try:
             if start_new_transaction:
-                logger.debug("Starting new transaction...")
                 await checkout.conn.execute("BEGIN;")
 
             yield checkout.conn
@@ -263,7 +260,7 @@ class PooledDatabaseInterface:
                         raise
 
             if scope.cancel_called:
-                logger.warning(f"Failed to cancel query running on {checkout.conn}")
+                logger.warning("Failed to cancel query", pid=checkout.conn._pid)
 
             raise
 
@@ -276,10 +273,8 @@ class PooledDatabaseInterface:
                     rollback_failed = e
 
             if checkout.conn.dead:
-                logger.warning(
-                    f"Connection {checkout.conn} is disconnected, scheduling "
-                    "creation of a new connection"
-                )
+                logger.warning("Pool connection dead", pid=checkout.conn._pid)
+
                 with anyio.CancelScope(shield=True):
                     try:
                         self._raw_connections.remove(checkout.conn)

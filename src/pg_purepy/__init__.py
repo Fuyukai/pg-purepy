@@ -1,6 +1,5 @@
 # flake8: noqa
 
-import logging
 from pg_purepy.connection import (
     AsyncPostgresConnection as AsyncPostgresConnection,
     QueryResult as QueryResult,
@@ -34,7 +33,3 @@ from pg_purepy.pool import (
     open_pool as open_pool,
 )
 from pg_purepy.protocol import SansIOClient as SansIOClient
-
-
-logging.addLevelName(5, "TRACE")
-del logging

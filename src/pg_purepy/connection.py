@@ -4,7 +4,6 @@ The AnyIO implementation of the PostgreSQL client.
 
 from __future__ import annotations
 
-import logging
 import types
 import warnings
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping
@@ -19,6 +18,7 @@ from typing import (
 )
 
 import anyio
+import structlog
 from anyio import EndOfStream, Lock
 from anyio.abc import ByteStream, SocketStream
 from anyio.streams.tls import TLSStream
@@ -48,7 +48,7 @@ from pg_purepy.protocol import (
     check_if_tls_accepted,
 )
 
-logger: logging.Logger = logging.getLogger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(name=__name__)
 
 T = TypeVar("T")
 
@@ -91,6 +91,8 @@ class AsyncPostgresConnection:
         self._secret_key: int = -1
 
         self._block_transactions = block_transactions
+
+        self._logger = logger.bind(database=state.database)
 
     @property
     def ready(self) -> bool:
@@ -171,7 +173,7 @@ class AsyncPostgresConnection:
         self._dead = True
 
     async def _read_until_ready(
-        self
+        self,
     ) -> AsyncGenerator[ErrorOrNoticeResponse | PostgresMessage | NeedData, None]:
         """
         Yields events until the connection is ready. This is an asynchronous generator. You can
@@ -196,9 +198,8 @@ class AsyncPostgresConnection:
                         warnings.warn(str(err), stacklevel=2)
 
                 elif isinstance(next_event, BackendKeyData):
-                    logger.debug(
-                        f"Got backend key data: {next_event.secret_key} / {next_event.pid}"
-                    )
+                    self._logger = self._logger.bind(pid=next_event.pid)
+                    logger.debug("Received BackendKeyData")
                     self._secret_key = next_event.secret_key
                     self._pid = next_event.pid
 
@@ -283,15 +284,13 @@ class AsyncPostgresConnection:
             if not self._protocol.ready:
                 await self.wait_until_ready()
 
-            simple_query = all(
-                (
-                    not (params or kwargs),
-                    not isinstance(query, PreparedStatementInfo),
-                    max_rows is None,
-                )
-            )
+            simple_query = all((
+                not (params or kwargs),
+                not isinstance(query, PreparedStatementInfo),
+                max_rows is None,
+            ))
 
-            logger.debug(f"EXECUTE:\n{query}")
+            logger.debug("Executing query", query=query)
             if simple_query:
                 data = self._protocol.do_simple_query(query)  # type: ignore
                 await self._write(data)
@@ -545,15 +544,15 @@ async def _open_socket(
     address_or_path = fspath(address_or_path)
     sock: SocketStream | TLSStream
     if address_or_path.startswith("/"):
-        logger.debug(f"Opening unix connection to {address_or_path}")
+        logger.debug("Opening connection", type="unix", path=address_or_path)
         sock = await anyio.connect_unix(address_or_path)
     else:
-        logger.debug(f"Opening TCP connection to {address_or_path}:{port}")
+        logger.debug("Opening connection", type="tcp", address=address_or_path, port=port)
         sock = await anyio.connect_tcp(remote_host=address_or_path, remote_port=port)
 
     try:
         if ssl_context:
-            logger.debug("Using TLS for the connection...")
+            logger.debug("Using TLS for connection")
 
             await sock.send(SSL_MESSAGE)
             response = await sock.receive(1)

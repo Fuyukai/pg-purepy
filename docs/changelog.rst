@@ -4,7 +4,7 @@ Changelog
 0.9.5 (2023-12-20)
 ------------------
 
-- Make :func:`.AsyncPostgresConnection.fetch_one` raise an error in the event of an empty row,
+- Make :meth:`.AsyncPostgresConnection.fetch_one` raise an error in the event of an empty row,
   instead of returning an optional. 
 
   This results in a more ergonomic API (as you don't need to check for None constantly) with the 
