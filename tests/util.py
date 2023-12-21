@@ -12,6 +12,9 @@ POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "")  # lol!
 @asynccontextmanager
 async def open_connection() -> AsyncGenerator[AsyncPostgresConnection, None]:
     async with open_database_connection(
-        address_or_path=POSTGRES_ADDRESS, username=POSTGRES_USERNAME, password=POSTGRES_PASSWORD
+        address_or_path=POSTGRES_ADDRESS, 
+        username=POSTGRES_USERNAME, 
+        password=POSTGRES_PASSWORD,
+        database="postgres",
     ) as conn:
         yield conn

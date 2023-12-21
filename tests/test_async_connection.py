@@ -237,7 +237,7 @@ async def test_execute_prepared_statement_insert():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_epsi (id serial primary key, foo text not null);"
+            "create temp table test_epsi (id int primary key generated always as identity, foo text not null);"
         )
 
         st_no_params = await conn.create_prepared_statement(
@@ -270,7 +270,7 @@ async def test_insert():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_insert (id serial primary key, foo text not null);"
+            "create temp table test_insert (id int primary key generated always as identity, foo text not null);"
         )
         row_count = await conn.execute("insert into test_insert(foo) values (:one);", one="test")
         assert row_count == 1
@@ -286,7 +286,7 @@ async def test_unparameterised_insert():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_insert2 (id serial primary key, foo text not null);"
+            "create temp table test_insert2 (id int primary key generated always as identity, foo text not null);"
         )
         row_count = await conn.execute("insert into test_insert2(foo) values ('test');")
         assert row_count == 1
@@ -302,7 +302,7 @@ async def test_update():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_update (id serial primary key, foo text not null);"
+            "create temp table test_update (id int primary key generated always as identity, foo text not null);"
         )
         await conn.execute("insert into test_update(foo) values (:one);", one="test")
         pre_update = await conn.fetch_one("select * from test_update;")
@@ -323,7 +323,7 @@ async def test_delete():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_delete (id serial primary key, foo text not null);"
+            "create temp table test_delete (id int primary key generated always as identity, foo text not null);"
         )
         await conn.execute("insert into test_delete(foo) values (:one);", one="test")
         pre_delete = await conn.fetch("select * from test_delete;")

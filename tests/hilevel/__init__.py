@@ -13,5 +13,6 @@ async def open_pool(conn_count: int | None = None) -> AsyncGenerator[PooledDatab
         address_or_path=POSTGRES_ADDRESS,
         username=POSTGRES_USERNAME,
         password=POSTGRES_PASSWORD,
+        database="postgres"
     ) as c:
         yield c
