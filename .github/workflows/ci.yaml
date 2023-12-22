@@ -39,6 +39,7 @@ jobs:
 
     test-postgresql:
         strategy:
+            fail-fast: false
             matrix:
                 postgres-version: ["16", "15", "14", "13", "12"]
         
