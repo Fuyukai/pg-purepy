@@ -1198,7 +1198,7 @@ class SansIOClient:
             code = FrontendMessageCode.PASSWORD
 
             # type ignore is fine, ``_check_password`` verifies itt.
-            assert self._password
+            assert self._password is not None
             packet_body += self._password.encode(encoding="ascii")
             self.state = ProtocolState.CLEARTEXT_SENT
 
@@ -1208,7 +1208,7 @@ class SansIOClient:
             assert salt, "state is MD5_STARTUP but salt is None?"
             self._check_password()
 
-            assert self._password
+            assert self._password is not None
 
             code = FrontendMessageCode.PASSWORD
             hashed_password = md5(self._password.encode("ascii") + self.username.encode("ascii"))
