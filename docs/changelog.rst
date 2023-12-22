@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.10.0 (2023-12-22)
+-------------------
+
+- Switch to the ``structlog`` package for logging.
+
 0.9.5 (2023-12-20)
 ------------------
 
