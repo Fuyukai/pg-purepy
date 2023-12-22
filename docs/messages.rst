@@ -80,4 +80,3 @@ These classes relate to parts of the query cycle.
     :members:
 
 .. autoclass:: pg_purepy.messages.BindComplete
-

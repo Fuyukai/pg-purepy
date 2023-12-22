@@ -9,7 +9,7 @@ jobs:
     verify-types:
         name: "Pyright Verify Types"
         runs-on: "ubuntu-latest"
-        
+
         steps:
             - name: "Checkout repository"
               uses: "actions/checkout@v4"
@@ -20,7 +20,7 @@ jobs:
               with:
                   path: ~/.local
                   key: poetry-0
-            
+
             - name: "Install Poetry"
               if: steps.cached-poetry.outputs.cache-hit != 'true'
               uses: "snok/install-poetry@v1"
@@ -30,10 +30,10 @@ jobs:
               with:
                   python-version: "3.12.1"
                   cache: "poetry"
-    
+
             - name: "Install project"
               run: poetry install --all-extras --no-interaction --no-ansi
-            
+
             - name: "Run Pyright"
               run: "poetry run pyright --verifytypes pg_purepy --ignoreexternal"
 
@@ -42,7 +42,7 @@ jobs:
             fail-fast: false
             matrix:
                 postgres-version: ["16", "15", "14", "13", "12"]
-        
+
         name: "Test on PostgreSQL ${{ matrix.postgres-version }}"
         runs-on: ubuntu-latest
 
@@ -53,7 +53,7 @@ jobs:
                     POSTGRES_USERNAME: "postgres"
                     POSTGRES_PASSWORD: "postgres"
                     POSTGRES_DB: "postgres"
-                
+
                 ports:
                     - 5432
 
@@ -67,7 +67,7 @@ jobs:
               with:
                   path: ~/.local
                   key: poetry-0
-            
+
             - name: "Install Poetry"
               if: steps.cached-poetry.outputs.cache-hit != 'true'
               uses: "snok/install-poetry@v1"
@@ -77,10 +77,10 @@ jobs:
               with:
                   python-version: "3.12.1"
                   cache: "poetry"
-    
+
             - name: "Install project"
               run: poetry install --all-extras --no-interaction --no-ansi
-            
+
             - name: "Run Pytest"
               run: "poetry run pytest -rPx --cov"
               env:
@@ -88,7 +88,7 @@ jobs:
                   POSTGRES_PASSWORD: "postgres"
                   POSTGRES_DATABASE: "postgres"
                   POSTGRES_PORT: "${{ job.services.postgresql.ports[5432] }}"
-                  
+
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v3
               env:

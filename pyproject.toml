@@ -66,18 +66,18 @@ line-length = 100
 show-source = true
 
 select = [
-  "RUF", 
-  "F", 
-  "E", 
+  "RUF",
+  "F",
+  "E",
   "W",
-  "I", 
-  "UP", 
-  "B",  
-  "YTT", 
+  "I",
+  "UP",
+  "B",
+  "YTT",
   "ASYNC",
-  "TRIO", 
-  "PYI", 
-  "SIM", 
+  "TRIO",
+  "PYI",
+  "SIM",
   "RET",
   "PERF",
 ]

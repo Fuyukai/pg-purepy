@@ -43,10 +43,10 @@ async def test_connection_with_invalid_password():
 
     with pytest.raises(InvalidPasswordError):
         async with open_database_connection(
-            address_or_path=POSTGRES_ADDRESS, 
-            username=POSTGRES_USERNAME, 
+            address_or_path=POSTGRES_ADDRESS,
+            username=POSTGRES_USERNAME,
             port=POSTGRES_PORT,
-            password=""
+            password="",
         ):
             pass
 
@@ -242,7 +242,10 @@ async def test_execute_prepared_statement_insert():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_epsi (id int primary key generated always as identity, foo text not null);"
+            """
+            create temp table test_epsi (
+                id int primary key generated always as identity, foo text not null
+            );"""
         )
 
         st_no_params = await conn.create_prepared_statement(
@@ -275,7 +278,12 @@ async def test_insert():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_insert (id int primary key generated always as identity, foo text not null);"
+            """
+            create temp table test_insert (
+                id int primary key generated always as identity,
+                foo text not null
+            );
+            """
         )
         row_count = await conn.execute("insert into test_insert(foo) values (:one);", one="test")
         assert row_count == 1
@@ -291,7 +299,10 @@ async def test_unparameterised_insert():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_insert2 (id int primary key generated always as identity, foo text not null);"
+            """create temp table test_insert2 (
+                id int primary key generated always as identity,
+                foo text not null
+            );"""
         )
         row_count = await conn.execute("insert into test_insert2(foo) values ('test');")
         assert row_count == 1
