@@ -49,3 +49,7 @@ jobs:
                   POSTGRES_DATABASE: "postgres"
                   POSTGRES_PORT: "${{ job.services.postgresql.ports[5432] }}"
                   
+            - name: Upload coverage reports to Codecov
+              uses: codecov/codecov-action@v3
+              env:
+                  CODECOV_TOKEN: "${{ secrets.CODECOV_TOKEN }}"

@@ -18,6 +18,7 @@ from pg_purepy.messages import (
 from tests.util import (
     POSTGRES_ADDRESS,
     POSTGRES_PASSWORD,
+    POSTGRES_PORT,
     POSTGRES_USERNAME,
     open_connection,
 )
@@ -42,7 +43,10 @@ async def test_connection_with_invalid_password():
 
     with pytest.raises(InvalidPasswordError):
         async with open_database_connection(
-            address_or_path=POSTGRES_ADDRESS, username=POSTGRES_USERNAME, password=""
+            address_or_path=POSTGRES_ADDRESS, 
+            username=POSTGRES_USERNAME, 
+            port=POSTGRES_PORT,
+            password=""
         ):
             pass
 
@@ -57,6 +61,7 @@ async def test_needs_password():
         async with open_database_connection(
             address_or_path=POSTGRES_ADDRESS,
             username=POSTGRES_USERNAME,
+            port=POSTGRES_PORT,
         ):
             pass
 
