@@ -42,7 +42,7 @@ jobs:
               run: poetry install --all-extras --no-interaction --no-ansi
             
             - name: "Run Pytest"
-              run: "poetry run pytest"
+              run: "poetry run pytest -rPx --cov"
               env:
                   POSTGRES_USERNAME: "postgres"
                   POSTGRES_PASSWORD: "postgres"
