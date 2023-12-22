@@ -13,8 +13,16 @@ jobs:
         steps:
             - name: "Checkout repository"
               uses: "actions/checkout@v4"
+
+            - name: Load cached Poetry installation
+              id: cached-poetry
+              uses: actions/cache@v3
+              with:
+                  path: ~/.local
+                  key: poetry-0
             
             - name: "Install Poetry"
+              if: steps.cached-poetry.outputs.cache-hit != 'true'
               uses: "snok/install-poetry@v1"
 
             - name: "Install Python 3.12"
@@ -32,7 +40,7 @@ jobs:
     test-postgresql:
         strategy:
             matrix:
-                postgres-version: ["16.1", "15.5"]
+                postgres-version: ["16", "15", "14", "13", "12"]
         
         name: "Test on PostgreSQL ${{ matrix.postgres-version }}"
         runs-on: ubuntu-latest
@@ -51,8 +59,16 @@ jobs:
         steps:
             - name: "Checkout repository"
               uses: "actions/checkout@v4"
+
+            - name: Load cached Poetry installation
+              id: cached-poetry
+              uses: actions/cache@v3
+              with:
+                  path: ~/.local
+                  key: poetry-0
             
             - name: "Install Poetry"
+              if: steps.cached-poetry.outputs.cache-hit != 'true'
               uses: "snok/install-poetry@v1"
 
             - name: "Install Python 3.12"
