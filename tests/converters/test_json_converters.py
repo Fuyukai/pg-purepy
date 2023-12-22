@@ -8,18 +8,16 @@ pytestmark = pytest.mark.anyio
 
 
 JSON_TYPES = ["json", "jsonb"]
-JSON_EXAMPLES = [
-    ('{"abc": "def"}', {"abc": "def"}),
-    ('[1, 2, 3]', [1, 2, 3])
-]
+JSON_EXAMPLES = [('{"abc": "def"}', {"abc": "def"}), ("[1, 2, 3]", [1, 2, 3])]
 
 
 async def test_loading_json():
     async with open_connection() as conn:
         for type_, (text, expected) in product(JSON_TYPES, JSON_EXAMPLES):
-            result = await conn.fetch_one(f'select \'{text}\'::{type_}')
+            result = await conn.fetch_one(f"select '{text}'::{type_}")
             assert result
             assert result.data[0] == expected
+
 
 async def test_inserting_json():
     async with open_connection() as conn:

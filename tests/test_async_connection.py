@@ -302,7 +302,11 @@ async def test_update():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_update (id int primary key generated always as identity, foo text not null);"
+            """
+            create temp table test_update (
+                id int primary key generated always as identity, foo text not null
+            );
+            """
         )
         await conn.execute("insert into test_update(foo) values (:one);", one="test")
         pre_update = await conn.fetch_one("select * from test_update;")
@@ -323,7 +327,12 @@ async def test_delete():
 
     async with open_connection() as conn:
         await conn.execute(
-            "create temp table test_delete (id int primary key generated always as identity, foo text not null);"
+            """
+            create temp table test_delete (
+                id int primary key generated always as identity,
+                foo text not null
+            );
+            """
         )
         await conn.execute("insert into test_delete(foo) values (:one);", one="test")
         pre_delete = await conn.fetch("select * from test_delete;")

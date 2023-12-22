@@ -1,0 +1,50 @@
+﻿name: CI
+
+on:
+    push:
+        branches: [master]
+    pull_request: {}
+
+jobs: 
+    test-postgresql:
+        strategy:
+            matrix:
+                postgres-version: ["16.1", "15.5"]
+        
+        name: "Test on PostgreSQL ${{ matrix.postgres-version }}"
+        runs-on: ubuntu-latest
+
+        services:
+            postgresql:
+                image: "postgres:${{ matrix.postgres-version }}"
+                env:
+                    POSTGRES_USERNAME: "postgres"
+                    POSTGRES_PASSWORD: "postgres"
+                    POSTGRES_DB: "postgres"
+                
+                ports:
+                    - 5432
+
+        steps:
+            - name: "Checkout repository"
+              uses: "actions/checkout@v4"
+            
+            - name: "Install Python 3.12"
+              uses: "actions/setup-python@v5"
+              with:
+                  python-version: "3.12.1"
+                  cache: "poetry"
+            - name: "Install Poetry"
+              uses: "snok/install-poetry@v1"
+            
+            - name: "Install project"
+              run: poetry install --all-extras --no-interaction --no-ansi
+            
+            - name: "Run Pytest"
+              run: "poetry run pytest"
+              env:
+                  POSTGRES_USERNAME: "postgres"
+                  POSTGRES_PASSWORD: "postgres"
+                  POSTGRES_DATABASE: "postgres"
+                  POSTGRES_PORT: "${{ job.services.postgresql.ports[5432] }}"
+                  
