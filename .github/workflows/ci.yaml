@@ -5,7 +5,30 @@ on:
         branches: [master]
     pull_request: {}
 
-jobs: 
+jobs:
+    verify-types:
+        name: "Pyright Verify Types"
+        runs-on: "ubuntu-latest"
+        
+        steps:
+            - name: "Checkout repository"
+              uses: "actions/checkout@v4"
+            
+            - name: "Install Poetry"
+              uses: "snok/install-poetry@v1"
+
+            - name: "Install Python 3.12"
+              uses: "actions/setup-python@v5"
+              with:
+                  python-version: "3.12.1"
+                  cache: "poetry"
+    
+            - name: "Install project"
+              run: poetry install --all-extras --no-interaction --no-ansi
+            
+            - name: "Run Pyright"
+              run: "poetry run pyright --verifytypes pg_purepy --ignoreexternal"
+
     test-postgresql:
         strategy:
             matrix:
