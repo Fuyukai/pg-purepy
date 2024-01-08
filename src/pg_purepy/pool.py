@@ -434,11 +434,14 @@ async def open_pool(
         ssl_context=ssl_context,
     )
 
-    async with anyio.create_task_group() as tg, PooledDatabaseInterface(
-        connection_count,
-        tg,
-        conn_fn=conn_fn,
-    ) as pool:
+    async with (
+        anyio.create_task_group() as tg,
+        PooledDatabaseInterface(
+            connection_count,
+            tg,
+            conn_fn=conn_fn,
+        ) as pool,
+    ):
         await pool._start(connection_count)
 
         yield pool
