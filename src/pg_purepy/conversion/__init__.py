@@ -111,4 +111,4 @@ def apply_default_converters(protocol: SansIOClient) -> None:
     protocol.add_converter(STATIC_DATEA_CONVERTER)
 
 
-__all__ = ("Converter", "apply_default_converters", "EnumConverter", "ArrayConverter")
+__all__ = ("ArrayConverter", "Converter", "EnumConverter", "apply_default_converters")
