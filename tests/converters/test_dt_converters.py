@@ -5,9 +5,8 @@ Tests date/time related converters.
 import datetime
 from typing import cast
 
-import arrow
-import dateutil.tz
 import pytest
+from whenever import OffsetDateTime
 
 from tests.util import open_connection
 
@@ -20,26 +19,27 @@ async def test_timestamptz_converter():
     """
     async with open_connection() as conn:
         await conn.execute("set timezone to 'UTC';")
-        assert conn.server_timezone == dateutil.tz.UTC
+        assert conn.server_timezone == "UTC"
 
         await conn.execute("create temp table test_ttz_in (id int primary key, dt timestamptz);")
-        juno = arrow.get("2011-08-05T16:25:00Z")
-        assert juno.tzinfo == conn.server_timezone
+        juno = OffsetDateTime.from_rfc3339("2011-08-05T16:25:00Z")
+        # assert juno.zon == conn.server_timezone
 
         await conn.execute(
-            "insert into test_ttz_in(id, dt) values (1, :dt);", dt=arrow.get("2011-08-05T16:25:00Z")
+            "insert into test_ttz_in(id, dt) values (1, :dt);",
+            dt=OffsetDateTime.from_rfc3339("2011-08-05T16:25:00Z"),
         )
 
         row_1 = await conn.fetch_one("select dt from test_ttz_in;")
         assert row_1
-        assert isinstance(row_1.data[0], arrow.Arrow)
+        assert isinstance(row_1.data[0], OffsetDateTime)
         assert row_1.data[0] == juno
 
         await conn.execute("set timezone to 'Europe/Helsinki';")
         row_2 = await conn.fetch_one("select dt from test_ttz_in;")
         assert row_2
 
-        dt: arrow.Arrow = cast(arrow.Arrow, row_2.data[0])
+        dt = cast(OffsetDateTime, row_2.data[0])
         assert dt.hour == 19
         assert dt.hour != juno.hour
         assert dt == juno

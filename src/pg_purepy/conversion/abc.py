@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import abc
-from datetime import tzinfo
 from typing import Any
 
 import attr
@@ -40,12 +39,11 @@ class Converter(metaclass=abc.ABCMeta):
 @attr.s(slots=True, frozen=False)
 class ConversionContext:
     """
-    A conversion context contains information that might be needed to convert from the PostgreSQL
-    string representation to the real representation.
+    Information that may be needed during conversion from PostgreSQL types.
     """
 
     #: The encoding of the client.
     client_encoding: str = attr.ib()
 
-    #: The timezone of the server.
-    timezone: tzinfo = attr.ib(default=UTC)
+    #: The raw timezone of the server.
+    timezone: str = attr.ib(default=UTC)

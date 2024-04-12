@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.11.0
+------
+
+- Switch to the ``whenever`` package for date/time types, instead of Arrow. See 
+  https://dev.arie.bovenberg.net/blog/python-datetime-pitfalls/ for more information as to why.
+
 0.10.0 (2023-12-22)
 -------------------
 

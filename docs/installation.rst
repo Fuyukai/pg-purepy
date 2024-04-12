@@ -17,9 +17,9 @@ Whilst ``pg-purepy`` has no C dependencies, it does have some external Python de
 - anyio_ is used for connecting to the database asynchronously.
 - scramp_ is used for SASL authentication.
 - attrs_ is used to create the message object classes.
-- arrow_ is used for better datetime types.
+- whenever_ is used for better datetime types.
 
 .. _anyio: https://anyio.readthedocs.io/en/stable/
 .. _scramp: https://github.com/tlocke/scramp
 .. _attrs: https://www.attrs.org/en/stable/
-.. _arrow: https://arrow.readthedocs.io/en/latest/
+.. _whenever: https://whenever.readthedocs.io/en/latest/

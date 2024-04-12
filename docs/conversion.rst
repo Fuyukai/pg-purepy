@@ -27,18 +27,16 @@ PostgreSQL core types.
 Date/Time types
 ~~~~~~~~~~~~~~~
 
-- ``TIMESTAMP WITH TIMEZONE`` and ``TIMESTAMP WITHOUT TIMEZONE`` are mapped to
-  :class:`~arrow.arrow.Arrow` instances. The server timezone and UTC are used for timezones
-  respectively, so it's all handled automatically.
-
-  .. note::
-
-    I use Arrow over the vanilla ``datetime`` objects because I don't like ``datetime``. Write your
-    own converter if you disagree with me.
-
+- ``TIMESTAMP WITH TIMEZONE`` is mapped to :class:`~whenever.OffsetDatetime`.
+- ``TIMESTAMP WITHOUT TIMEZONE`` is mapped to :class:`~whenever.NaiveDatetime`.
 - ``DATE`` is mapped to :class:`datetime.date`.
 - ``TIME WITHOUT TIMEZONE`` is mapped to :class:`datetime.time`. ``TIME WITH TIMEZONE``
   `isn't supported <https://wiki.postgresql.org/wiki/Don%27t_Do_This#Don.27t_use_timetz>`__.
+
+.. note::
+
+    I use Whenever over the vanilla ``datetime`` objects because I don't like ``datetime``. Write 
+    your own converter if you disagree with me.
 
 Enumeration types
 ~~~~~~~~~~~~~~~~~

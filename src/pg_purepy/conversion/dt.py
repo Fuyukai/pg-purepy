@@ -3,7 +3,9 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Literal, assert_never
 
-import arrow
+import dateutil
+import dateutil.parser
+import whenever
 
 from pg_purepy.conversion.abc import Converter
 from pg_purepy.conversion.arrays import ArrayConverter
@@ -19,19 +21,22 @@ class TimestampTzConverter(Converter):
 
     oid = 1184
 
-    def from_postgres(self, context: ConversionContext, data: str) -> arrow.Arrow | str:
+    def from_postgres(self, context: ConversionContext, data: str) -> whenever.OffsetDateTime | str:
         if data == "infinity" or data == "-infinity":
             return data
 
         # TIMESTAMPTZ are stored in UTC, and are converted to the server's timezone on retrieval.
         # So we provide the returned date in the server's timezone.
-        return arrow.get(data, tzinfo=context.timezone)
+        parsed = dateutil.parser.isoparse(data)
+
+        # can't directly pass the datetime as it'll complain about UTC.
+        return whenever.OffsetDateTime.from_rfc3339(parsed.isoformat())
 
     def to_postgres(
-        self, context: ConversionContext, data: Literal["infinity", "-infinity"] | arrow.Arrow
+        self,
+        context: ConversionContext,
+        data: Literal["infinity", "-infinity"] | whenever.OffsetDateTime,
     ) -> str:
-        # There's some really jank type stuff going on here, mypy can't narrow the type properly
-        # here?
 
         match data:
             case "infinity":
@@ -40,8 +45,8 @@ class TimestampTzConverter(Converter):
             case "-infinity":
                 return "-infinity"
 
-            case arrow.Arrow():
-                return data.isoformat()
+            case whenever.OffsetDateTime():
+                return data.rfc3339()
 
             case _:
                 assert_never(data)
@@ -58,13 +63,13 @@ class TimestampNoTzConverter(Converter):
 
     oid = 1114
 
-    def from_postgres(self, context: ConversionContext, data: str) -> arrow.Arrow | str:
+    def from_postgres(self, context: ConversionContext, data: str) -> whenever.NaiveDateTime | str:
         if data == "infinity" or data == "-infinity":
             return data
 
-        return arrow.get(data)  # No timezone!
+        return whenever.NaiveDateTime.from_common_iso8601(data)
 
-    def to_postgres(self, context: ConversionContext, data: arrow.Arrow) -> str:
+    def to_postgres(self, context: ConversionContext, data: whenever.NaiveDateTime) -> str:
         # we can once again just do isoformat, because postgres will parse it, go "nice offset.
         # fuck you" and completely discard it.
         #
@@ -75,7 +80,7 @@ class TimestampNoTzConverter(Converter):
         # | 2021-07-13 22:16:36 |
         # +---------------------+
 
-        return data.isoformat()
+        return data.common_iso8601()
 
 
 STATIC_TIMESTAMPNOTZ_CONVERTER = TimestampNoTzConverter()

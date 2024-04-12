@@ -8,12 +8,10 @@ import enum
 import functools
 import struct
 from collections.abc import Callable, Collection, Mapping
-from datetime import tzinfo
 from hashlib import md5
 from itertools import count as it_count
 from typing import Any
 
-import dateutil.tz
 import structlog
 from scramp import ScramClient
 from structlog.stdlib import BoundLogger
@@ -121,9 +119,9 @@ NEED_DATA = NeedData()
 _NO_HANDLE = object()
 
 
-def unrecoverable_error(
-    fn: Callable[[SansIOClient, BackendMessageCode, Buffer], PostgresMessage],
-) -> Callable[[SansIOClient, BackendMessageCode, Buffer], PostgresMessage]:
+def unrecoverable_error[_Self: "SansIOClient"](
+    fn: Callable[[_Self, BackendMessageCode, Buffer], PostgresMessage],
+) -> Callable[[_Self, BackendMessageCode, Buffer], PostgresMessage]:
     """
     Decorator that will automatically set the state to an unrecoverable error if an error response
     is found.
@@ -131,7 +129,7 @@ def unrecoverable_error(
 
     @functools.wraps(fn)
     def wrapper(
-        self: SansIOClient, code: BackendMessageCode, body: Buffer
+        self: _Self, code: BackendMessageCode, body: Buffer
     ) -> ErrorOrNoticeResponse | PostgresMessage:
         if code == BackendMessageCode.ERROR_RESPONSE:
             error = self._decode_error_response(body, recoverable=False, notice=False)
@@ -259,7 +257,6 @@ class ProtocolState(enum.Enum):
     TERMINATED = 9999
 
 
-# noinspection PyMethodMayBeStatic,PyUnresolvedReferences
 class SansIOClient:
     """
     Sans-I/O state machine for the PostgreSQL C<->S protocol. This operates as an in-memory buffer
@@ -376,13 +373,15 @@ class SansIOClient:
         """
         The client encoding.
         """
+
         return self._conversion_context.client_encoding
 
     @property
-    def timezone(self) -> tzinfo:
+    def timezone(self) -> str:
         """
-        The server timezone.
+        The raw server timezone.
         """
+
         return self._conversion_context.timezone
 
     @property
@@ -420,15 +419,10 @@ class SansIOClient:
         if name == "client_encoding":
             self._conversion_context.client_encoding = value
         elif name == "TimeZone":
-            gotten = dateutil.tz.gettz(value)
-            if gotten is None:
+            if value is None:
                 raise ValueError(f"PG returned invalid timezone {value}!")
 
-            # coerce 'UTC' zoneinfo into tzutc
-            if gotten == dateutil.tz.gettz("UTC"):
-                gotten = dateutil.tz.UTC
-
-            self._conversion_context.timezone = gotten
+            self._conversion_context.timezone = value
         else:
             self.connection_params[name] = value
 
@@ -1110,7 +1104,7 @@ class SansIOClient:
             # rough flow:
             # 1) copy off the main buffer into the packet buffer
             # 2) if we have enough data, unflip the flag, reset buffers
-            # 3) if we don't hjave enough data, just return NEED_DATA, we'll check again next loop
+            # 3) if we don't have enough data, just return NEED_DATA, we'll check again next loop
 
             remaining = self._current_packet_remaining
             assert remaining > 0, "partial packet needs actual data to read"

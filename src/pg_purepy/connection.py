@@ -8,7 +8,6 @@ import types
 import warnings
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping
 from contextlib import aclosing, asynccontextmanager
-from datetime import tzinfo
 from os import PathLike, fspath
 from ssl import SSLContext
 from typing import (
@@ -123,19 +122,22 @@ class AsyncPostgresConnection:
         """
         Returns a read-only view of the current connection;
         """
+
         return types.MappingProxyType(self._protocol.connection_params)
 
     @property
-    def server_timezone(self) -> tzinfo:
+    def server_timezone(self) -> str:
         """
         Returns the timezone of the server.
         """
+
         return self._protocol.timezone
 
     def add_converter(self, converter: Converter) -> None:
         """
         Registers a :class:`.Converter` with this connection.
         """
+
         self._protocol.add_converter(converter)
 
     def __repr__(self) -> str:
@@ -284,11 +286,13 @@ class AsyncPostgresConnection:
             if not self._protocol.ready:
                 await self.wait_until_ready()
 
-            simple_query = all((
-                not (params or kwargs),
-                not isinstance(query, PreparedStatementInfo),
-                max_rows is None,
-            ))
+            simple_query = all(
+                (
+                    not (params or kwargs),
+                    not isinstance(query, PreparedStatementInfo),
+                    max_rows is None,
+                )
+            )
 
             logger.debug("Executing query", query=query)
             if simple_query:
