@@ -40,12 +40,12 @@ if TYPE_CHECKING:
     from pg_purepy.protocol import SansIOClient
 
 
-def _make_array_converters(
+def _make_array_converters[T](
     oids: Sequence[int],
-    cvs: Sequence[Converter],
+    cvs: Sequence[Converter[T]],
     *,
     quote_inner: bool = False,
-) -> list[Converter]:
+) -> list[Converter[list[T]]]:
     return [
         ArrayConverter(oid, cv, quote_inner=quote_inner)
         for (oid, cv) in zip(oids, cvs, strict=True)

@@ -14,6 +14,7 @@ from typing import (
     Any,
     Self,
     TypeVar,
+    override,
 )
 
 import anyio
@@ -133,13 +134,14 @@ class AsyncPostgresConnection:
 
         return self._protocol.timezone
 
-    def add_converter(self, converter: Converter) -> None:
+    def add_converter(self, converter: Converter[Any]) -> None:
         """
         Registers a :class:`.Converter` with this connection.
         """
 
         self._protocol.add_converter(converter)
 
+    @override
     def __repr__(self) -> str:
         return f"<{type(self).__name__} pid='{self._pid!r}'>"
 
@@ -493,9 +495,11 @@ class QueryResult(AsyncIterator[DataRow]):
     ) -> bool:
         return False
 
+    @override
     def __aiter__(self) -> Self:
         return self
 
+    @override
     async def __anext__(self) -> DataRow:
         # infinitely loops until we get a message we care about
 

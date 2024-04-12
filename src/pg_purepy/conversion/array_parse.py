@@ -31,9 +31,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # mypy: ignore-errors
+# pyright: basic
 
+from collections.abc import Callable
 from enum import Enum
-from typing import Any
 
 
 class ArrayState(Enum):
@@ -43,7 +44,7 @@ class ArrayState(Enum):
     Out = 4
 
 
-def _parse_array(data, adapter) -> list[Any]:
+def _parse_array[T](data: str, adapter: Callable[[str], T]) -> list[T]:
     state = ArrayState.Out
     stack = [[]]
     val = []

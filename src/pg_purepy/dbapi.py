@@ -32,6 +32,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # mypy: ignore-errors
+# pyright: basic
 
 from itertools import count
 from typing import Any, LiteralString

@@ -4,7 +4,7 @@ import abc
 import enum
 import logging
 from io import StringIO
-from typing import Any
+from typing import Any, override
 
 import attr
 
@@ -43,10 +43,10 @@ class AuthenticationRequest(PostgresMessage):
     method: AuthenticationMethod = attr.ib()
 
     #: When doing MD5 authentication, the salt to use.
-    md5_salt: bytes | None = attr.ib(default=None)
+    md5_salt: bytearray | None = attr.ib(default=None)
 
     #: When doing SASL authentication, the list of authentication methods.
-    sasl_methods: list[str] = attr.ib(default=[])
+    sasl_methods: list[str] = attr.ib(factory=list)
 
 
 @attr.s(slots=True)
@@ -201,17 +201,18 @@ class DataRow(QueryResultMessage):
 
     #: A list of column values, in the same order as the description, that contains the actual
     #: converted data incoming from the server.
-    data: list[Any | None] = attr.ib()
+    data: list[Any] = attr.ib()
 
-    def __getitem__(self, item: int) -> Any | None:  # pragma: no cover
+    def __getitem__(self, item: int) -> Any:  # pragma: no cover
         return self.data[item]
 
-    def to_dict(self) -> dict[str, Any | None]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Converts this data row to a dict. If multiple columns have the same name, this may not
         end up the way you expect.
         """
-        d = {}
+
+        d: dict[str, Any] = {}
         for col, data in zip(self.description.columns, self.data, strict=True):
             d[col.name] = data
 
@@ -331,6 +332,7 @@ class BaseDatabaseError(PostgresqlError):
     def __init__(self, response: ErrorOrNoticeResponse, query: str | None = None):
         self.response = response
 
+    @override
     def __str__(self) -> str:
         buf = StringIO()
         buf.write(self.response.severity)

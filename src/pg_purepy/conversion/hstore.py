@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, override
 
 from pg_purepy.conversion._parse_hstore import _parse_hstore, _serialize_hstore
 from pg_purepy.conversion.abc import ConversionContext, Converter
@@ -9,7 +10,7 @@ if TYPE_CHECKING:
     from pg_purepy.pool import AsyncPostgresConnection
 
 
-class HStoreConverter(Converter):
+class HStoreConverter(Converter[Mapping[str, str]]):
     """
     Converter for the PostgreSQL hstore type.
     """
@@ -17,10 +18,12 @@ class HStoreConverter(Converter):
     def __init__(self, oid: int):
         self.oid = oid
 
-    def from_postgres(self, context: ConversionContext, data: str) -> Any:
+    @override
+    def from_postgres(self, context: ConversionContext, data: str) -> Mapping[str, str]:
         return _parse_hstore(data)
 
-    def to_postgres(self, context: ConversionContext, data: Any) -> str:
+    @override
+    def to_postgres(self, context: ConversionContext, data: Mapping[str, str]) -> str:
         return _serialize_hstore(data)
 
 

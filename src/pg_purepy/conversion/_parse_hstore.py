@@ -22,6 +22,7 @@
 ## SOFTWARE.
 
 # mypy: ignore-errors
+# pyright: basic
 
 from __future__ import annotations
 
@@ -55,7 +56,7 @@ HSTORE_DELIMITER_RE = re.compile(
 )
 
 
-def _parse_hstore(hstore_str) -> Mapping[str, str]:
+def _parse_hstore(hstore_str: str) -> Mapping[str, str]:
     """
     Parse an hstore from its literal string representation.
 
@@ -92,7 +93,7 @@ def _parse_hstore(hstore_str) -> Mapping[str, str]:
     return result
 
 
-def _serialize_hstore(val) -> str:
+def _serialize_hstore(val: Mapping[str, str]) -> str:
     """Serialize a dictionary into an hstore literal.  Keys and values must
     both be strings (except None for values).
     """

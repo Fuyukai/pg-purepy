@@ -64,7 +64,8 @@ class Buffer:
         """
         Reads all null-terminated C strings from the buffer.
         """
-        items = []
+
+        items: list[str] = []
         while self.data:
             items.append(self.read_cstring(encoding))
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast, override
 
 from pg_purepy.conversion.abc import Converter
 
@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pg_purepy.protocol import ConversionContext
 
 
-class EnumConverter(Converter):
+class EnumConverter[T : Enum](Converter[T]):
     """
     A converter that lets you use Python enums for PostgreSQL enums.
     """
@@ -17,7 +17,7 @@ class EnumConverter(Converter):
     def __init__(
         self,
         oid: int,
-        enum_klass: type[Enum],
+        enum_klass: type[T],
         *,
         use_member_values: bool = False,
         lowercase_names: bool = True,
@@ -36,7 +36,8 @@ class EnumConverter(Converter):
         self._use_members = use_member_values
         self._lowercase_names = lowercase_names
 
-    def from_postgres(self, context: ConversionContext, data: str) -> Any:
+    @override
+    def from_postgres(self, context: ConversionContext, data: str) -> T:
         if self._use_members:
             return self._member_klass(data)
 
@@ -49,6 +50,7 @@ class EnumConverter(Converter):
             # hmm...
             return self._member_klass[data.upper()]
 
+    @override
     def to_postgres(self, context: ConversionContext, data: Enum) -> str:
         if self._use_members:
             return cast(str, data.value)

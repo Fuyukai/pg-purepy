@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import abc
-from typing import Any
 
 import attr
 from dateutil.tz import UTC
 
 
-class Converter(metaclass=abc.ABCMeta):
+class Converter[IntoType](metaclass=abc.ABCMeta):
     """
     Base class for all conversion classes. Implement this to create a custom converter.
     """
@@ -16,7 +15,7 @@ class Converter(metaclass=abc.ABCMeta):
     oid: int
 
     @abc.abstractmethod
-    def from_postgres(self, context: ConversionContext, data: str) -> Any:
+    def from_postgres(self, context: ConversionContext, data: str) -> IntoType:
         """
         Converts ``data`` from the PostgreSQL string representation to a Python type.
 
@@ -26,7 +25,7 @@ class Converter(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def to_postgres(self, context: ConversionContext, data: Any) -> str:
+    def to_postgres(self, context: ConversionContext, data: IntoType) -> str:
         """
         Converts ``data`` from the Python type to the PostgreSQL string representation.
 

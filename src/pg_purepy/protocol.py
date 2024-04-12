@@ -10,7 +10,7 @@ import struct
 from collections.abc import Callable, Collection, Mapping
 from hashlib import md5
 from itertools import count as it_count
-from typing import Any
+from typing import Any, Self
 
 import structlog
 from scramp import ScramClient
@@ -307,7 +307,7 @@ class SansIOClient:
         self.is_authenticated: bool = False
 
         #: The converter classes used to convert between PostgreSQL and Python types.
-        self.converters: dict[int, Converter] = {}
+        self.converters: dict[int, Converter[Any]] = {}
 
         #: Boolean value for if the current connection is in a transaction.
         self.in_transaction: bool = False
@@ -419,9 +419,6 @@ class SansIOClient:
         if name == "client_encoding":
             self._conversion_context.client_encoding = value
         elif name == "TimeZone":
-            if value is None:
-                raise ValueError(f"PG returned invalid timezone {value}!")
-
             self._conversion_context.timezone = value
         else:
             self.connection_params[name] = value
@@ -472,7 +469,7 @@ class SansIOClient:
         Decodes the row description message.
         """
         field_count = body.read_short()
-        fields = []
+        fields: list[ColumnDescription] = []
 
         for _i in range(0, field_count):
             name = body.read_cstring(encoding=self.encoding)
@@ -613,7 +610,7 @@ class SansIOClient:
                 sasl_body = body.read_remaining().decode("ascii")
 
                 assert self._scramp_client
-                self._scramp_client.set_server_first(sasl_body)
+                self._scramp_client.set_server_first(sasl_body)  # type: ignore
                 self.state = ProtocolState.SASL_FIRST_RECEIVED
                 return SASLContinue()
 
@@ -761,7 +758,7 @@ class SansIOClient:
         raise UnknownMessageError(f"Unexpected message {code!r}")
 
     _handle_during_SIMPLE_QUERY_ERRORED: Callable[
-        [SansIOClient, BackendMessageCode, Buffer], PostgresMessage
+        [Self, BackendMessageCode, Buffer], PostgresMessage
     ] = _handle_ready_for_query
 
     ### Multi query, Prepared Statements ###
@@ -890,7 +887,7 @@ class SansIOClient:
     _handle_during_RECOVERABLE_ERROR = _handle_ready_for_query
 
     ## Public API ##
-    def add_converter(self, converter: Converter) -> None:
+    def add_converter(self, converter: Converter[Any]) -> None:
         """
         Adds a new :class:`.Converter` to this protocol.
         """
@@ -1168,7 +1165,8 @@ class SansIOClient:
         # if we made it here, we can actually process the packet since we have it in full
 
         result: PostgresMessage | ErrorOrNoticeResponse = method(code, buffer)
-        if result is None:
+
+        if result is None:  # type: ignore
             raise Exception(f"{method.__qualname__} returned None! This is a bug!")
 
         return result

@@ -60,7 +60,7 @@ class PooledDatabaseInterface:
         )
 
         # list of converters used when opening a new connection
-        self._converters: set[Converter] = set()
+        self._converters: set[Converter[Any]] = set()
 
         # used to add new converters. non-queue.
         self._raw_connections: set[AsyncPostgresConnection] = set()
@@ -138,7 +138,7 @@ class PooledDatabaseInterface:
         # using a double shielded nursery setup that will try and gracefully exit the connection,
         # then forcibly disconnect if required.
 
-        gathered = []
+        gathered: list[OpenedConnection] = []
         while True:
             try:
                 gathered.append(self._read.receive_nowait())
@@ -147,8 +147,8 @@ class PooledDatabaseInterface:
 
         assert len(gathered) <= self._connection_count
 
-        swallowed = []
-        forcibly_killed = []
+        swallowed: list[Exception] = []
+        forcibly_killed: list[OpenedConnection] = []
 
         async def kill(o: OpenedConnection) -> None:
             if o.conn.dead:
@@ -338,13 +338,9 @@ class PooledDatabaseInterface:
         """
 
         row = await self.fetch_one("select oid from pg_type where typname = :name", name=type_name)
-
-        if row is None:
-            return None
-
         return row.data[0]
 
-    def add_converter(self, converter: Converter) -> None:
+    def add_converter(self, converter: Converter[Any]) -> None:
         """
         Registers a converter for all the connections on this pool.
         """
@@ -354,7 +350,7 @@ class PooledDatabaseInterface:
             conn.add_converter(converter)
 
     async def add_converter_using(
-        self, fn: Callable[[AsyncPostgresConnection], Awaitable[Converter | None]]
+        self, fn: Callable[[AsyncPostgresConnection], Awaitable[Converter[Any] | None]]
     ) -> None:
         """
         Adds a converter using the specified async function. Useful primarily for extension types
@@ -367,7 +363,7 @@ class PooledDatabaseInterface:
         if converter is not None:
             self.add_converter(converter)
 
-    async def add_converter_with_array(self, converter: Converter, **kwargs: Any) -> None:
+    async def add_converter_with_array(self, converter: Converter[Any], **kwargs: Any) -> None:
         """
         Registers a converter, and adds the array type converter to it too.
         """
@@ -378,8 +374,6 @@ class PooledDatabaseInterface:
             row = await conn.fetch_one(
                 "select typarray::oid from pg_type where oid = :oid", oid=converter.oid
             )
-            if row is None:
-                return
 
             arrcv = ArrayConverter(oid=row[0], subconverter=converter, **kwargs)  # type: ignore
             self.add_converter(arrcv)

@@ -6,6 +6,8 @@ Changelog
 
 - Switch to the ``whenever`` package for date/time types, instead of Arrow. See 
   https://dev.arie.bovenberg.net/blog/python-datetime-pitfalls/ for more information as to why.
+- ``pg-purepy`` now passes Pyright strict mode.
+- :class:`.Converter` is now a generic type.
 
 0.10.0 (2023-12-22)
 -------------------
