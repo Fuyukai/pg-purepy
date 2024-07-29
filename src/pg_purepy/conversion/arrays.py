@@ -30,7 +30,7 @@ class ArrayConverter[T](Converter[list[T]]):
     def from_postgres(self, context: ConversionContext, data: str) -> list[T]:
         p = partial(self._subconverter.from_postgres, context)
         return _parse_array(data, p)
-    
+
     @override
     def to_postgres(self, context: ConversionContext, data: Iterable[T]) -> str:
         converted = [

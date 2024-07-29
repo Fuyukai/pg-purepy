@@ -44,7 +44,6 @@ class TimestampTzConverter(Converter[PostgresTimestampTz]):
         context: ConversionContext,
         data: PostgresTimestampTz,
     ) -> str:
-
         match data:
             case "infinity":
                 return "infinity"
@@ -85,14 +84,14 @@ class TimestampNoTzConverter(Converter[PostgresTimestampWithoutTz]):
         # |---------------------|
         # | 2021-07-13 22:16:36 |
         # +---------------------+
-        
+
         match data:
             case "infinity":
                 return data
 
             case "-infinity":
                 return data
-            
+
             case whenever.NaiveDateTime():
                 return data.common_iso8601()
 
