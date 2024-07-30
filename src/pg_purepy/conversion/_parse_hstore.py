@@ -103,7 +103,7 @@ def _serialize_hstore(val: Mapping[str, str]) -> str:
             return "NULL"
 
         if isinstance(s, str):
-            return '"%s"' % s.replace("\\", "\\\\").replace('"', r"\"")
+            return '"{}"'.format(s.replace("\\", "\\\\").replace('"', r"\""))
 
         raise ValueError(f"{s!r} in {position} position is not a string.")
 

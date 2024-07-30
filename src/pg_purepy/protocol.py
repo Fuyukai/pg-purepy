@@ -13,7 +13,7 @@ from itertools import count as it_count
 from typing import Any, Self
 
 import structlog
-from scramp import ScramClient
+from scramp import ScramClient  # pyright: ignore[reportMissingTypeStubs]
 from structlog.stdlib import BoundLogger
 
 from pg_purepy.conversion import apply_default_converters

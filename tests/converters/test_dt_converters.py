@@ -22,12 +22,12 @@ async def test_timestamptz_converter():
         assert conn.server_timezone == "UTC"
 
         await conn.execute("create temp table test_ttz_in (id int primary key, dt timestamptz);")
-        juno = OffsetDateTime.from_rfc3339("2011-08-05T16:25:00Z")
+        juno = OffsetDateTime.parse_rfc3339("2011-08-05T16:25:00Z")
         # assert juno.zon == conn.server_timezone
 
         await conn.execute(
             "insert into test_ttz_in(id, dt) values (1, :dt);",
-            dt=OffsetDateTime.from_rfc3339("2011-08-05T16:25:00Z"),
+            dt=OffsetDateTime.parse_rfc3339("2011-08-05T16:25:00Z"),
         )
 
         row_1 = await conn.fetch_one("select dt from test_ttz_in;")

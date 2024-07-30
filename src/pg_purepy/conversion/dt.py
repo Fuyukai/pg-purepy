@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 type PostgresInfinity = Literal["infinity", "-infinity"]
 type PostgresTimestampTz = whenever.OffsetDateTime | PostgresInfinity
-type PostgresTimestampWithoutTz = whenever.NaiveDateTime | PostgresInfinity
+type PostgresTimestampWithoutTz = whenever.LocalDateTime | PostgresInfinity
 
 
 class TimestampTzConverter(Converter[PostgresTimestampTz]):
@@ -36,7 +36,7 @@ class TimestampTzConverter(Converter[PostgresTimestampTz]):
         parsed = dateutil.parser.isoparse(data)
 
         # can't directly pass the datetime as it'll complain about UTC.
-        return whenever.OffsetDateTime.from_rfc3339(parsed.isoformat())
+        return whenever.OffsetDateTime.parse_rfc3339(parsed.isoformat())
 
     @override
     def to_postgres(
@@ -44,7 +44,6 @@ class TimestampTzConverter(Converter[PostgresTimestampTz]):
         context: ConversionContext,
         data: PostgresTimestampTz,
     ) -> str:
-
         match data:
             case "infinity":
                 return "infinity"
@@ -53,7 +52,7 @@ class TimestampTzConverter(Converter[PostgresTimestampTz]):
                 return "-infinity"
 
             case whenever.OffsetDateTime():
-                return data.rfc3339()
+                return data.format_common_iso()
 
 
 STATIC_TIMESTAMPTZ_CONVERTER = TimestampTzConverter()
@@ -72,7 +71,7 @@ class TimestampNoTzConverter(Converter[PostgresTimestampWithoutTz]):
         if data == "infinity" or data == "-infinity":
             return data
 
-        return whenever.NaiveDateTime.from_common_iso8601(data)
+        return whenever.LocalDateTime.parse_common_iso(data)
 
     @override
     def to_postgres(self, context: ConversionContext, data: PostgresTimestampWithoutTz) -> str:
@@ -85,16 +84,16 @@ class TimestampNoTzConverter(Converter[PostgresTimestampWithoutTz]):
         # |---------------------|
         # | 2021-07-13 22:16:36 |
         # +---------------------+
-        
+
         match data:
             case "infinity":
                 return data
 
             case "-infinity":
                 return data
-            
-            case whenever.NaiveDateTime():
-                return data.common_iso8601()
+
+            case whenever.LocalDateTime():
+                return data.format_common_iso()
 
 
 STATIC_TIMESTAMPNOTZ_CONVERTER = TimestampNoTzConverter()

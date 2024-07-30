@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pg_purepy.protocol import ConversionContext
 
 
-class EnumConverter[T : Enum](Converter[T]):
+class EnumConverter[T: Enum](Converter[T]):
     """
     A converter that lets you use Python enums for PostgreSQL enums.
     """
