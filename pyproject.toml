@@ -104,4 +104,4 @@ reportIncompatibleVariableOverride = false
 reportPrivateUsage = false
 
 [tool.poetry-dynamic-versioning]
-enable = false
+enable = true
