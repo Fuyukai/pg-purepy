@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import types
 import warnings
+from asyncio import lowlevel
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping
 from contextlib import aclosing, asynccontextmanager
 from os import PathLike, fspath
@@ -187,7 +188,7 @@ class AsyncPostgresConnection:
         """
 
         if self._protocol.ready:
-            await anyio.sleep(0)
+            await lowlevel.checkpoint()
             return
 
         while True:
@@ -210,7 +211,7 @@ class AsyncPostgresConnection:
                 yield next_event
 
                 if isinstance(next_event, ReadyForQuery):
-                    await anyio.sleep(0)  # checkpoint()
+                    await lowlevel.checkpoint()  # checkpoint()
                     return
 
             to_send = self._protocol.get_needed_synchronisation()
@@ -288,13 +289,11 @@ class AsyncPostgresConnection:
             if not self._protocol.ready:
                 await self.wait_until_ready()
 
-            simple_query = all(
-                (
-                    not (params or kwargs),
-                    not isinstance(query, PreparedStatementInfo),
-                    max_rows is None,
-                )
-            )
+            simple_query = all((
+                not (params or kwargs),
+                not isinstance(query, PreparedStatementInfo),
+                max_rows is None,
+            ))
 
             logger.debug("Executing query", query=query)
             if simple_query:
@@ -527,7 +526,7 @@ class QueryResult(AsyncIterator[DataRow]):
         """
 
         if self._row_count >= 0:
-            await anyio.sleep(0)  # checkpoint
+            await lowlevel.checkpoint()  # checkpoint
             return self._row_count
 
         async for _ in self:
