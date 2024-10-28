@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, StrEnum
 
 import pytest
 from pg_purepy.conversion.enums import EnumConverter
@@ -14,7 +14,7 @@ class StandardEnum(Enum):
     THREE = 3
 
 
-class StringEnum(str, Enum):
+class StringEnum(StrEnum):
     THREE = "one"
     ONE = "two"
     TWO = "three"

@@ -289,13 +289,11 @@ class AsyncPostgresConnection:
             if not self._protocol.ready:
                 await self.wait_until_ready()
 
-            simple_query = all(
-                (
-                    not (params or kwargs),
-                    not isinstance(query, PreparedStatementInfo),
-                    max_rows is None,
-                )
-            )
+            simple_query = all((
+                not (params or kwargs),
+                not isinstance(query, PreparedStatementInfo),
+                max_rows is None,
+            ))
 
             logger.debug("Executing query", query=query)
             if simple_query:
