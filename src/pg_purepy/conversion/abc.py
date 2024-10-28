@@ -3,7 +3,6 @@ from __future__ import annotations
 import abc
 
 import attr
-from dateutil.tz import UTC
 
 
 class Converter[IntoType](metaclass=abc.ABCMeta):
@@ -45,4 +44,4 @@ class ConversionContext:
     client_encoding: str = attr.ib()
 
     #: The raw timezone of the server.
-    timezone: str = attr.ib(default=UTC)
+    timezone: str = attr.ib(default="UTC")

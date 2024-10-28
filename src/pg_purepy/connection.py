@@ -18,6 +18,7 @@ from typing import (
 )
 
 import anyio
+import anyio.lowlevel
 import structlog
 from anyio import EndOfStream, Lock
 from anyio.abc import ByteStream, SocketStream
@@ -187,7 +188,7 @@ class AsyncPostgresConnection:
         """
 
         if self._protocol.ready:
-            await anyio.sleep(0)
+            await anyio.lowlevel.checkpoint()
             return
 
         while True:
@@ -210,7 +211,7 @@ class AsyncPostgresConnection:
                 yield next_event
 
                 if isinstance(next_event, ReadyForQuery):
-                    await anyio.sleep(0)  # checkpoint()
+                    await anyio.lowlevel.checkpoint()  # checkpoint()
                     return
 
             to_send = self._protocol.get_needed_synchronisation()
@@ -527,7 +528,7 @@ class QueryResult(AsyncIterator[DataRow]):
         """
 
         if self._row_count >= 0:
-            await anyio.sleep(0)  # checkpoint
+            await anyio.lowlevel.checkpoint()  # checkpoint
             return self._row_count
 
         async for _ in self:
