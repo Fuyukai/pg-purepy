@@ -35,7 +35,7 @@ Date/Time types
 
 .. note::
 
-    I use Whenever over the vanilla ``datetime`` objects because I don't like ``datetime``. Write 
+    I use Whenever over the vanilla ``datetime`` objects because I don't like ``datetime``. Write
     your own converter if you disagree with me.
 
 Enumeration types
