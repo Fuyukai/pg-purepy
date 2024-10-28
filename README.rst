@@ -8,7 +8,7 @@ pg-purepy is a pure-Python PostgreSQL wrapper based on the `anyio`_ library.
 
 A lot of this library was inspired by the `pg8000`_ library. Credits to that.
 
-Read the docs at https://pg.py.veriny.tf/.
+Read the docs at https://pg-purepy.readthedocs.io/en/latest/.
 
 .. _anyio: https://github.com/agronholm/anyio
 .. _pg8000: https://github.com/tlocke/pg8000
