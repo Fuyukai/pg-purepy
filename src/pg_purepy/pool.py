@@ -11,7 +11,7 @@ from types import TracebackType
 from typing import Any, Literal, Self
 
 import anyio
-import attr
+import attrs
 import structlog
 from anyio.abc import ByteStream, TaskGroup
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
@@ -32,10 +32,10 @@ from pg_purepy.messages import (
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(name=__name__)
 
 
-@attr.s(slots=True)
+@attrs.define()
 class OpenedConnection:
-    sock: ByteStream = attr.ib()
-    conn: AsyncPostgresConnection = attr.ib()
+    sock: ByteStream = attrs.field()
+    conn: AsyncPostgresConnection = attrs.field()
 
 
 class PooledDatabaseInterface:

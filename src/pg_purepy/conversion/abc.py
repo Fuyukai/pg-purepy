@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 
-import attr
+import attrs
 
 
 class Converter[IntoType](metaclass=abc.ABCMeta):
@@ -34,14 +34,14 @@ class Converter[IntoType](metaclass=abc.ABCMeta):
         """
 
 
-@attr.s(slots=True, frozen=False)
+@attrs.define(slots=True, frozen=False)
 class ConversionContext:
     """
     Information that may be needed during conversion from PostgreSQL types.
     """
 
     #: The encoding of the client.
-    client_encoding: str = attr.ib()
+    client_encoding: str = attrs.field()
 
     #: The raw timezone of the server.
-    timezone: str = attr.ib(default="UTC")
+    timezone: str = attrs.field(default="UTC")

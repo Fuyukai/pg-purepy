@@ -6,14 +6,14 @@ import logging
 from io import StringIO
 from typing import Any, override
 
-import attr
+import attrs
 
 from pg_purepy.exc import PostgresqlError
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-@attr.s(slots=True, frozen=False)
+@attrs.define()
 class PostgresMessage:
     """
     Base class for a PostgreSQL protocol message.
@@ -33,67 +33,64 @@ class AuthenticationMethod(enum.IntEnum):
     SASL = 10
 
 
-@attr.s(slots=True)
+@attrs.define()
 class AuthenticationRequest(PostgresMessage):
     """
     Returned when the PostgreSQL server requires authentication.
     """
 
     #: The authentication method required.
-    method: AuthenticationMethod = attr.ib()
+    method: AuthenticationMethod = attrs.field()
 
     #: When doing MD5 authentication, the salt to use.
-    md5_salt: bytearray | None = attr.ib(default=None)
+    md5_salt: bytearray | None = attrs.field(default=None)
 
     #: When doing SASL authentication, the list of authentication methods.
-    sasl_methods: list[str] = attr.ib(factory=list)
+    sasl_methods: list[str] = attrs.field(factory=list)
 
 
-@attr.s(slots=True)
+@attrs.define()
 class SASLContinue(PostgresMessage):
     """
     Returned when the PostgreSQL server wants us to continue doing SASL authentication.
     """
 
 
-@attr.s(slots=True)
+@attrs.define()
 class SASLComplete(PostgresMessage):
     """
     Returned when SASL authentication is complete.
     """
 
 
-@attr.s(slots=True)
+@attrs.define()
 class BackendKeyData(PostgresMessage):
     """
     Misc data used for cancellation.
     """
 
     #: The :class:`int` PID of this connection.
-    pid: int = attr.ib()
+    pid: int = attrs.field()
 
     #: The 64-bit :class:`int` secret key data of this connection.
-    secret_key: int = attr.ib()
+    secret_key: int = attrs.field()
 
 
-@attr.s(slots=True)
+@attrs.define()
 class AuthenticationCompleted(PostgresMessage):
     """
     Returned when authentication is completed.
     """
 
 
-@attr.s(slots=True)
+@attrs.define()
 class ParameterStatus(PostgresMessage):
     """
     Returned when a configuration parameter is changed, e.g. via SET.
     """
 
-    #: The :class:`str` name of the parameter.
-    name: str = attr.ib()
-
-    #: The :class:`str` value of the parameter.
-    value: str = attr.ib()
+    name: str = attrs.field()
+    value: str = attrs.field()
 
 
 class ReadyForQueryState(enum.Enum):
@@ -111,14 +108,14 @@ class ReadyForQueryState(enum.Enum):
     ERRORED_TRANSACTION = ord("E")
 
 
-@attr.s(slots=True)
+@attrs.define()
 class ReadyForQuery(PostgresMessage):
     """
     Returned when the protocol machine is ready for the next query cycle.
     """
 
     #: The sub-state that the current connection is in.
-    state: ReadyForQueryState = attr.ib()
+    state: ReadyForQueryState = attrs.field()
 
 
 class ErrorResponseFieldType(enum.IntEnum):
@@ -146,39 +143,39 @@ class ErrorResponseFieldType(enum.IntEnum):
     UNKNOWN = 0
 
 
-@attr.s(slots=True, frozen=True)
+@attrs.define(frozen=True)
 class ColumnDescription:
     """
     A description of a column.
     """
 
     #: The :class:`str` name of this column.
-    name: str = attr.ib()
+    name: str = attrs.field()
 
     #: The optional :class:`int` table OID of this column.
-    table_oid: int | None = attr.ib()
+    table_oid: int | None = attrs.field()
 
     #: The optional :class:`int` column index of this column.
-    column_index: int | None = attr.ib()
+    column_index: int | None = attrs.field()
 
     #: The :class`int` type OID of this column.
-    type_oid: int = attr.ib()
+    type_oid: int = attrs.field()
 
     #: The :class`int` internal column length.
-    column_length: int = attr.ib()
+    column_length: int = attrs.field()
 
     #: The :class:`int` type modifier for this column.
-    type_modifier: int = attr.ib()
+    type_modifier: int = attrs.field()
 
 
-@attr.s(slots=True)
+@attrs.define()
 class QueryResultMessage(PostgresMessage, abc.ABC):
     """
     Superclass for query results.
     """
 
 
-@attr.s(slots=True)
+@attrs.define()
 class RowDescription(QueryResultMessage):
     """
     Describes the rows of a query.
@@ -186,10 +183,10 @@ class RowDescription(QueryResultMessage):
 
     #: The list of :class:`.ColumnDescription` instances that wraps the decoding info for each
     #: column returned in this row.
-    columns: list[ColumnDescription] = attr.ib()
+    columns: list[ColumnDescription] = attrs.field()
 
 
-@attr.s(slots=True)
+@attrs.define()
 class DataRow(QueryResultMessage):
     """
     A singular data row. This contains a :class:`.RowDescription` and a list of converted data
@@ -197,11 +194,11 @@ class DataRow(QueryResultMessage):
     """
 
     #: The :class:`.RowDescription` that describes the data within this row.
-    description: RowDescription = attr.ib()
+    description: RowDescription = attrs.field()
 
     #: A list of column values, in the same order as the description, that contains the actual
     #: converted data incoming from the server.
-    data: list[Any] = attr.ib()
+    data: list[Any] = attrs.field()
 
     def __getitem__(self, item: int) -> Any:  # pragma: no cover
         return self.data[item]
@@ -219,41 +216,41 @@ class DataRow(QueryResultMessage):
         return d
 
 
-@attr.s(slots=True)
+@attrs.define()
 class CommandComplete(QueryResultMessage):
     """
     Returned when a single query command is complete.
     """
 
     #: The :class:`str` command tag. Probably useless.
-    tag: str = attr.ib()
+    tag: str = attrs.field()
 
     #: The :class:`int` row count returned. This may be None if the command does not have a row
     #: count (e.g. SHOW or SET).
-    row_count: int | None = attr.ib()
+    row_count: int | None = attrs.field()
 
 
-@attr.s(slots=True)
+@attrs.define()
 class ParseComplete(PostgresMessage):
     """
     Returned when parsing a prepared statement completes.
     """
 
     #: The :class:`str` name of the statement prepared. None means the unnamed prepared statement.
-    statement_name: str | None = attr.ib()
+    statement_name: str | None = attrs.field()
 
 
-@attr.s(slots=True)
+@attrs.define()
 class ParameterDescription(PostgresMessage):
     """
     Returned when parsing a ParameterDescription message.
     """
 
     #: The list of :class:`int` OIDs within this description.
-    oids: list[int] = attr.ib()
+    oids: list[int] = attrs.field()
 
 
-@attr.s(slots=True)
+@attrs.define()
 class PreparedStatementInfo(PostgresMessage):
     """
     Contains the state of a prepared statement. Returned for a RowDescription over a prepared
@@ -261,24 +258,24 @@ class PreparedStatementInfo(PostgresMessage):
     """
 
     #: The :class:`str` name of the prepared statement.
-    name: str | None = attr.ib()
+    name: str | None = attrs.field()
 
     #: The :class:`~.ParameterDescription` for the parameters for this prepared statement.
-    parameter_oids: ParameterDescription = attr.ib()
+    parameter_oids: ParameterDescription = attrs.field()
 
     #: The :class:`~.RowDescription` of the incoming row data of the prepared statement.
     #: This may be None if this query doesn't return any data.
-    row_description: RowDescription | None = attr.ib()
+    row_description: RowDescription | None = attrs.field()
 
 
-@attr.s(slots=True)
+@attrs.define()
 class BindComplete(PostgresMessage):
     """
     Returned when a Bind message completes successfully.
     """
 
 
-@attr.s(slots=True)
+@attrs.define()
 class PortalSuspended(PostgresMessage):
     """
     Returned when the execution portal is suspended.
@@ -292,35 +289,35 @@ def _optional_int(value: str | None) -> int | None:
     return int(value)
 
 
-@attr.s(slots=True, frozen=False)
+@attrs.define()
 class ErrorOrNoticeResponse(PostgresMessage):
     """
     Returned when an error or a notice message is produced from the server.
     """
 
     #: If this error is a notice, rather than a real error.
-    notice: bool = attr.ib()
+    notice: bool = attrs.field()
 
     #: If this error is recoverable or not.
-    recoverable: bool = attr.ib()
+    recoverable: bool = attrs.field()
 
-    severity_localised: str = attr.ib()
-    severity: str = attr.ib()
-    code: str = attr.ib()
-    message: str = attr.ib()
+    severity_localised: str = attrs.field()
+    severity: str = attrs.field()
+    code: str = attrs.field()
+    message: str = attrs.field()
 
     # optional parameters
-    hint: str = attr.ib(default=None)
-    detail: str | None = attr.ib(default=None)
-    position: int | None = attr.ib(default=None, converter=_optional_int)
-    internal_position: int | None = attr.ib(default=None, converter=_optional_int)
-    internal_query: str | None = attr.ib(default=None)
-    where: str | None = attr.ib(default=None)
-    schema_name: str | None = attr.ib(default=None)
-    table_name: str | None = attr.ib(default=None)
-    column_name: str | None = attr.ib(default=None)
-    data_type_name: str | None = attr.ib(default=None)
-    constraint_name: str | None = attr.ib(default=None)
+    hint: str = attrs.field(default=None)
+    detail: str | None = attrs.field(default=None)
+    position: int | None = attrs.field(default=None, converter=_optional_int)
+    internal_position: int | None = attrs.field(default=None, converter=_optional_int)
+    internal_query: str | None = attrs.field(default=None)
+    where: str | None = attrs.field(default=None)
+    schema_name: str | None = attrs.field(default=None)
+    table_name: str | None = attrs.field(default=None)
+    column_name: str | None = attrs.field(default=None)
+    data_type_name: str | None = attrs.field(default=None)
+    constraint_name: str | None = attrs.field(default=None)
 
 
 class BaseDatabaseError(PostgresqlError):

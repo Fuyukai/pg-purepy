@@ -17,7 +17,7 @@ dependencies = [
     "whenever>=0.6.9",
 ]
 name = "pg-purepy"
-version = "0.11.0"
+version = "0.11.1"
 description = "A pure-Python anyio-based PostgreSQL adapter."
 classifiers = [
     "Development Status :: 4 - Beta",
