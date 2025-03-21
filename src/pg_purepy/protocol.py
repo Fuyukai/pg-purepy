@@ -119,9 +119,9 @@ NEED_DATA = NeedData()
 _NO_HANDLE = object()
 
 
-def unrecoverable_error[_Self: "SansIOClient"](
-    fn: Callable[[_Self, BackendMessageCode, Buffer], PostgresMessage],
-) -> Callable[[_Self, BackendMessageCode, Buffer], PostgresMessage]:
+def unrecoverable_error[Self_: "SansIOClient"](
+    fn: Callable[[Self_, BackendMessageCode, Buffer], PostgresMessage],
+) -> Callable[[Self_, BackendMessageCode, Buffer], PostgresMessage]:
     """
     Decorator that will automatically set the state to an unrecoverable error if an error response
     is found.
@@ -129,7 +129,7 @@ def unrecoverable_error[_Self: "SansIOClient"](
 
     @functools.wraps(fn)
     def wrapper(
-        self: _Self, code: BackendMessageCode, body: Buffer
+        self: Self_, code: BackendMessageCode, body: Buffer
     ) -> ErrorOrNoticeResponse | PostgresMessage:
         if code == BackendMessageCode.ERROR_RESPONSE:
             error = self._decode_error_response(body, recoverable=False, notice=False)

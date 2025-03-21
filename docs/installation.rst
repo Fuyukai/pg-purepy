@@ -5,12 +5,12 @@ Installation
 
 .. code-block:: fish
 
-    $ poetry add pg-purepy
+    $ pdm add pg-purepy
 
 Dependencies
 ------------
 
-``pg-purepy`` requires Python 3.11 or newer.
+``pg-purepy`` requires Python 3.12 or newer.
 
 Whilst ``pg-purepy`` has no C dependencies, it does have some external Python dependencies.
 

@@ -26,3 +26,5 @@ profile.prof
 .pytest_cache
 
 cc/
+.pdm-python
+coverage.json
