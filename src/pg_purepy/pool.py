@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import struct
 import warnings
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from functools import partial
 from ssl import SSLContext
@@ -210,9 +210,9 @@ class PooledDatabaseInterface:
         return await self._cleanup()
 
     @asynccontextmanager
-    async def _checkout_connection(
+    async def checkout_connection(
         self, start_new_transaction: bool = False
-    ) -> AsyncGenerator[AsyncPostgresConnection, None]:
+    ) -> AsyncIterator[AsyncPostgresConnection]:
         """
         Checks out a single connection from the connection pool.
         """
@@ -254,9 +254,7 @@ class PooledDatabaseInterface:
                 try:
                     await checkout.conn.wait_until_ready()
                 except RecoverableDatabaseError as e:
-                    if e.response.code == "57014":
-                        pass
-                    else:
+                    if e.response.code != "57014":
                         raise
 
             if scope.cancel_called:
@@ -301,7 +299,7 @@ class PooledDatabaseInterface:
         if you wish to execute something in a transaction.
         """
 
-        async with self._checkout_connection(start_new_transaction=True) as conn:
+        async with self.checkout_connection(start_new_transaction=True) as conn:
             yield conn
 
     async def execute(self, query: str, *params: Any, **kwargs: Any) -> int:
@@ -310,7 +308,7 @@ class PooledDatabaseInterface:
         :meth:`.AsyncPostgresConnection.execute` for more information.
         """
 
-        async with self._checkout_connection() as conn:
+        async with self.checkout_connection() as conn:
             return await conn.execute(query, *params, **kwargs)
 
     async def fetch(self, query: str, *params: Any, **kwargs: Any) -> list[DataRow]:
@@ -319,7 +317,7 @@ class PooledDatabaseInterface:
         :meth:`.AsyncPostgresConnection.fetch` for more information.
         """
 
-        async with self._checkout_connection() as conn:
+        async with self.checkout_connection() as conn:
             return await conn.fetch(query, *params, **kwargs)
 
     async def fetch_one(self, query: str, *params: Any, **kwargs: Any) -> DataRow:
@@ -328,7 +326,7 @@ class PooledDatabaseInterface:
         :meth:`.AsyncPostgresConnection.fetch_one` for more information.
         """
 
-        async with self._checkout_connection() as conn:
+        async with self.checkout_connection() as conn:
             return await conn.fetch_one(query, *params, **kwargs)
 
     ## Utility Methods ##
@@ -357,7 +355,7 @@ class PooledDatabaseInterface:
         where the oids aren't fixed.
         """
 
-        async with self._checkout_connection() as conn:
+        async with self.checkout_connection() as conn:
             converter = await fn(conn)
 
         if converter is not None:
@@ -370,7 +368,7 @@ class PooledDatabaseInterface:
 
         self.add_converter(converter)
 
-        async with self._checkout_connection() as conn:
+        async with self.checkout_connection() as conn:
             row = await conn.fetch_one(
                 "select typarray::oid from pg_type where oid = :oid", oid=converter.oid
             )
