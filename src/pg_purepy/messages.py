@@ -3,8 +3,9 @@ from __future__ import annotations
 import abc
 import enum
 import logging
+from collections.abc import Sequence
 from io import StringIO
-from typing import Any, override
+from typing import Any, final, overload, override
 
 import attrs
 
@@ -176,7 +177,8 @@ class QueryResultMessage(PostgresMessage, abc.ABC):
 
 
 @attrs.define()
-class RowDescription(QueryResultMessage):
+@final
+class RowDescription(QueryResultMessage, Sequence[ColumnDescription]):
     """
     Describes the rows of a query.
     """
@@ -185,9 +187,26 @@ class RowDescription(QueryResultMessage):
     #: column returned in this row.
     columns: list[ColumnDescription] = attrs.field()
 
+    @override
+    def __len__(self) -> int:  # pragma: no cover
+        return len(self.columns)
+
+    @overload
+    def __getitem__(self, index: int) -> ColumnDescription: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> list[ColumnDescription]: ...
+
+    @override
+    def __getitem__(
+        self, index: int | slice
+    ) -> ColumnDescription | list[ColumnDescription]:  # pragma: no cover
+        return self.columns[index]
+
 
 @attrs.define()
-class DataRow(QueryResultMessage):
+@final
+class DataRow(QueryResultMessage, Sequence[Any]):
     """
     A singular data row. This contains a :class:`.RowDescription` and a list of converted data
     values.
@@ -200,8 +219,19 @@ class DataRow(QueryResultMessage):
     #: converted data incoming from the server.
     data: list[Any] = attrs.field()
 
-    def __getitem__(self, item: int) -> Any:  # pragma: no cover
-        return self.data[item]
+    @override
+    def __len__(self) -> int:  # pragma: no cover
+        return len(self.data)
+
+    @overload
+    def __getitem__(self, index: int) -> Any: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Any: ...
+
+    @override
+    def __getitem__(self, index: int | slice) -> Any:  # pragma: no cover
+        return self.data[index]
 
     def to_dict(self) -> dict[str, Any]:
         """
