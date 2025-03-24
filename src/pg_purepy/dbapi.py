@@ -54,7 +54,7 @@ def convert_paramstyle(
     in_quote_escape = False
     placeholders = []
     output_query = []
-    map(lambda x: "$" + str(x), count(1))
+    ("$" + str(x) for x in count(1))
     state = OUTSIDE
     prev_c = None
     for i, c in enumerate(query):
