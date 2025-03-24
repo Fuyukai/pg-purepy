@@ -1,3 +1,5 @@
+from typing import Any
+
 import anyio
 import pytest
 from pg_purepy import ConnectionInTransactionWarning, UnrecoverableDatabaseError
@@ -12,7 +14,7 @@ async def test_successful_pool_usage():
     Tests a successful pool usage.
     """
 
-    results = set()
+    results: set[Any] = set()
 
     async with open_pool(conn_count=3) as p:
 
@@ -25,7 +27,7 @@ async def test_successful_pool_usage():
             results.add(result.data[1])
 
         async with anyio.create_task_group() as nursery:
-            for i in range(0, 3):
+            for i in range(3):
                 nursery.start_soon(execute, i + 1)
 
         assert results == {1, 2, 3}
@@ -51,7 +53,7 @@ async def test_pool_transactions():
     """
 
     async with open_pool(conn_count=1) as p:
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError):  # noqa: PT012
             async with p.checkout_in_transaction() as conn:
                 assert conn.in_transaction
                 await conn.execute(
@@ -59,12 +61,12 @@ async def test_pool_transactions():
                 )
                 raise RuntimeError()
 
-            result = await p.fetch_one(
-                "select count(*) from pg_tables where tablename = :name;",
-                name="test_transaction_helper_error",
-            )
+        result = await p.fetch_one(
+            "select count(*) from pg_tables where tablename = :name;",
+            name="test_transaction_helper_error",
+        )
 
-            assert result.data[0] == 0
+        assert result.data[0] == 0
 
 
 async def test_transaction_rollback():

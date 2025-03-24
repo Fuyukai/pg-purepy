@@ -67,7 +67,7 @@ exclude_lines = [
 target-version = "py312"
 respect-gitignore = true
 # fix = true
-src = ["src/pg_purepy"]
+src = ["src/pg_purepy", "tests"]
 line-length = 100
 output-format = "full"
 preview = true
@@ -116,7 +116,7 @@ combine-as-imports = true
 
 [tool.pyright]
 pythonVersion = "3.12"
-include = ["src"]
+include = ["src", "tests"]
 typeCheckingMode = "strict"
 
 reportImplicitOverride = "warning"

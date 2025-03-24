@@ -428,16 +428,14 @@ class AsyncPostgresConnection:
         async with self.query(query, *params, max_rows=max_rows, **kwargs) as q:
             return [i async for i in q]
 
-    async def fetch_one(
+    async def fetch_one_or_none(
         self,
         query: str | PreparedStatementInfo,
         *params: Any,
         **kwargs: Any,
-    ) -> DataRow:
+    ) -> DataRow | None:
         """
         Like :meth:`.fetch`, but only fetches one row.
-
-        :raises MissingRowError: If there's no row in the result.
         """
 
         row = await self.fetch(query, *params, **kwargs)
@@ -445,7 +443,19 @@ class AsyncPostgresConnection:
         try:
             return row[0]
         except IndexError:
-            raise MissingRowError() from None
+            return None
+
+    async def fetch_one(
+        self, query: str | PreparedStatementInfo, *params: Any, **kwargs: Any
+    ) -> DataRow:
+        """
+        Like :meth:`.fetch_one`, but raises :class:`.MissingRowError` if there's no row to fetch.
+        """
+
+        if res := await self.fetch_one_or_none(query, *params, **kwargs):
+            return res
+
+        raise MissingRowError()
 
     async def execute(
         self,

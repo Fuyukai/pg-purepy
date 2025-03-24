@@ -320,7 +320,12 @@ class PooledDatabaseInterface:
         async with self.checkout_connection() as conn:
             return await conn.fetch(query, *params, **kwargs)
 
-    async def fetch_one(self, query: str, *params: Any, **kwargs: Any) -> DataRow:
+    async def fetch_one(
+        self,
+        query: str,
+        *params: Any,
+        **kwargs: Any,
+    ) -> DataRow:
         """
         Like :meth:`.fetch`, but only returns one row. See
         :meth:`.AsyncPostgresConnection.fetch_one` for more information.
@@ -328,6 +333,14 @@ class PooledDatabaseInterface:
 
         async with self.checkout_connection() as conn:
             return await conn.fetch_one(query, *params, **kwargs)
+
+    async def fetch_one_or_none(self, query: str, *params: Any, **kwargs: Any) -> DataRow | None:
+        """
+        See :meth:`.AsyncPostgresConnection.fetch_one_or_none`.
+        """
+
+        async with self.checkout_connection() as conn:
+            return await conn.fetch_one_or_none(query, *params, **kwargs)
 
     ## Utility Methods ##
     async def find_oid_for_type(self, type_name: str) -> int | None:

@@ -170,7 +170,7 @@ async def test_empty_select_raises():
     """
 
     async with open_connection() as conn:
-        with pytest.raises(MissingRowError):
+        with pytest.raises(MissingRowError):  # noqa: PT012
             await conn.execute("create temporary table empty (_ int primary key);")
             await conn.fetch_one("select * from empty;")
 
@@ -216,7 +216,7 @@ async def test_transaction_helper_error():
     """
 
     async with open_connection() as conn:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError):  # noqa: PT011, PT012
             async with conn.with_transaction():
                 assert conn.in_transaction
                 await conn.execute(
@@ -359,7 +359,7 @@ async def test_notices():
     """
 
     async with open_connection() as conn:
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning):  # noqa: PT030
             await conn.execute(
                 "DO language plpgsql $$ BEGIN RAISE WARNING 'hello, world!'; END $$;"
             )
@@ -395,7 +395,7 @@ async def test_set_illegal_parameter():
 
 
 ## Misc ##
-async def test_get_cached_row_count(anyio_backend):
+async def test_get_cached_row_count(anyio_backend: str):
     """
     Tests that getting the cached row count works.
     """
@@ -453,3 +453,11 @@ async def test_transaction_when_cancelled():
         await conn.execute("select 1;")
 
         assert not conn.in_transaction
+
+
+async def test_returning_none_from_fetch_one():
+    async with open_connection() as conn:
+        res = await conn.fetch_one_or_none(
+            "select 1 from pg_tables where schemaname = 'doesntexist';", return_none_on_empty=True
+        )
+        assert res is None
