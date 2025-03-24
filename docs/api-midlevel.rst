@@ -91,12 +91,12 @@ Example usage:
         async for row in query:
             print(row.data)
 
-        print("Total rows:", await query.row_count())
+        print("Total rows:", await query.consume_all())
 
 
 .. warning::
 
-    The lazy function only support one query at a time, due to limitations in API design and the
+    The lazy functions only support one query at a time, due to limitations in API design and the
     underlying protocol.
 
 Paramaterised Queries

@@ -14,11 +14,13 @@ from typing import (
     Any,
     Self,
     TypeVar,
+    final,
     override,
 )
 
 import anyio
 import anyio.lowlevel
+import attrs
 import structlog
 from anyio import EndOfStream, Lock
 from anyio.abc import ByteStream, SocketStream
@@ -362,7 +364,7 @@ class AsyncPostgresConnection:
         async with aclosing(
             self.lowlevel_query(query, *params, max_rows=max_rows, **kwargs),
         ) as agen:
-            yield QueryResult(agen.__aiter__())
+            yield QueryResult(iterator=agen.__aiter__())
             # always wait
             await self.wait_until_ready()
 
@@ -475,34 +477,22 @@ class AsyncPostgresConnection:
         """
 
         async with self.query(query, *params, max_rows=max_rows, **kwargs) as q:
-            return await q.row_count()
+            return await q.consume_all()
 
 
+@attrs.define(kw_only=True)
+@final
 class QueryResult(AsyncIterator[DataRow]):
     """
     Wraps the execution of a query. This can be asynchronously iterated over in order to get
     incoming data rows.
     """
 
-    def __init__(self, iterator: AsyncIterator[PostgresMessage]):
-        """
-        :param iterator: An iterator of :class:`.PostgresMessage` instances returned from the
-                         server.
-        """
+    _iterator: AsyncIterator[PostgresMessage] = attrs.field(alias="iterator")
+    _total_row_count: int = attrs.field(init=False, default=-1)
 
-        self._iterator = iterator
-        self._row_count = -1
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: types.TracebackType | None,
-    ) -> bool:
-        return False
+    #: The number of rows that this query has seen so far.
+    seen_rows: int = attrs.field(init=False, default=0)
 
     @override
     def __aiter__(self) -> Self:
@@ -515,34 +505,30 @@ class QueryResult(AsyncIterator[DataRow]):
         while True:
             next_message = await self._iterator.__anext__()
             if isinstance(next_message, DataRow):
+                self.seen_rows += 1
                 return next_message
 
             if isinstance(next_message, CommandComplete):
                 # some messages don't have a row count, e.g. CREATE
                 if next_message.row_count is None:
-                    self._row_count = 0
+                    self._total_row_count = 0
                 else:
-                    self._row_count = next_message.row_count
+                    self._total_row_count = next_message.row_count
 
                 raise StopAsyncIteration
 
-    async def row_count(self) -> int:
+    async def consume_all(self) -> int:
         """
-        Gets the row count for this query.
-
-        .. warning::
-
-            This will discard any remaining data rows in the currently executing query.
+        Consumes all rows for this result and returns the total row count.
         """
 
-        if self._row_count >= 0:
-            await anyio.lowlevel.checkpoint()  # checkpoint
-            return self._row_count
+        if self._total_row_count >= 0:
+            await anyio.lowlevel.checkpoint()
 
         async for _ in self:
             pass
 
-        return self._row_count
+        return self._total_row_count
 
 
 # TODO: support byte paths
@@ -560,7 +546,7 @@ async def _open_socket(
 
     address_or_path = fspath(address_or_path)
     sock: SocketStream | TLSStream
-    if address_or_path.startswith("/"):
+    if address_or_path.startswith("/"):  # pragma: no cover
         logger.debug("Opening connection", type="unix", path=address_or_path)
         sock = await anyio.connect_unix(address_or_path)
     else:

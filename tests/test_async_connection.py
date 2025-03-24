@@ -1,5 +1,5 @@
 import warnings
-from contextlib import aclosing
+from contextlib import aclosing, suppress
 
 import anyio
 import pytest
@@ -395,7 +395,7 @@ async def test_set_illegal_parameter():
 
 
 ## Misc ##
-async def test_get_cached_row_count(anyio_backend: str):
+async def test_consume_all(anyio_backend: str):
     """
     Tests that getting the cached row count works.
     """
@@ -404,11 +404,29 @@ async def test_get_cached_row_count(anyio_backend: str):
         rows = [r async for r in query]
         assert rows[0].data[0] == 1
 
-        assert await query.row_count() == 1
+        assert await query.consume_all() == 1
 
         if anyio_backend == "trio":
             with trio.testing.assert_checkpoints():
-                assert await query.row_count() == 1
+                assert await query.consume_all() == 1
+
+
+async def test_seen_rows() -> None:
+    """
+    Tests the seen rows field.
+    """
+
+    async with (
+        open_connection() as conn,
+        conn.query("select * from ( values (1), (2), (3))") as query,
+    ):
+        assert query.seen_rows == 0
+        it = aiter(query)
+        _ = await anext(it)
+
+        assert query.seen_rows == 1
+        assert await query.consume_all() == 3
+        assert query.seen_rows == 3
 
 
 async def test_insert_into_not_null():
@@ -461,3 +479,15 @@ async def test_returning_none_from_fetch_one():
             "select 1 from pg_tables where schemaname = 'doesntexist';", return_none_on_empty=True
         )
         assert res is None
+
+
+async def test_query_result_with_errors():
+    # wow, 5 levels of indentation
+    async with open_connection() as conn:
+        with suppress(ValueError):
+            async with conn.query("select * from ( values (1), (2), (3))") as next:
+                async for i in next:
+                    assert i.data[0] == 1
+                    raise ValueError
+
+        assert (await conn.fetch_one("select 12345;")).data[0] == 12345

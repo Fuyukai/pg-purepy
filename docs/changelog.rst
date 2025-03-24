@@ -11,6 +11,9 @@ Changelog
 
 - (Re)added :meth:`.AsyncPostgresConnection.fetch_one_or_none`.
 
+- Cleaned up the :class:`.QueryResult` API significantly. It's no longer a context manager, and has
+  better properties for row counts.
+
 0.11.1 (2024-07-30)
 -------------------
 
