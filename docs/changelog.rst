@@ -14,6 +14,9 @@ Changelog
 - Cleaned up the :class:`.QueryResult` API significantly. It's no longer a context manager, and has
   better properties for row counts.
 
+- The connection now uses a conflict detector instead of a lock to prevent nested queries from
+  deadlocking.
+
 0.11.1 (2024-07-30)
 -------------------
 

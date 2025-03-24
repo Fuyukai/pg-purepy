@@ -4,6 +4,7 @@ from contextlib import aclosing, suppress
 import anyio
 import pytest
 import trio.testing
+from anyio import BusyResourceError
 from anyio.lowlevel import checkpoint
 from pg_purepy.connection import open_database_connection
 from pg_purepy.exc import MissingPasswordError, MissingRowError, ProtocolParseError
@@ -491,3 +492,10 @@ async def test_query_result_with_errors():
                     raise ValueError
 
         assert (await conn.fetch_one("select 12345;")).data[0] == 12345
+
+
+async def test_attempting_nested_queries():
+    async with open_connection() as conn, conn.query("select * from ( values (3), (4));") as q:
+        async for _ in q:
+            with pytest.raises(BusyResourceError):
+                await conn.fetch_one("select 2;")

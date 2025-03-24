@@ -22,7 +22,7 @@ import anyio
 import anyio.lowlevel
 import attrs
 import structlog
-from anyio import EndOfStream, Lock
+from anyio import EndOfStream, ResourceGuard
 from anyio.abc import ByteStream, SocketStream
 from anyio.streams.tls import TLSStream
 
@@ -84,7 +84,7 @@ class AsyncPostgresConnection:
         self._stream = stream
         self._protocol = state
 
-        self._query_lock = Lock()
+        self._protocol_guard = ResourceGuard()
 
         # marks if the connection is dead, usually if a connection error happens during read/write.
         self._dead = False
@@ -261,6 +261,12 @@ class AsyncPostgresConnection:
             return message_found
 
     ## Low-level API ##
+
+    async def _do_create_prepared_statement(self, name: str, query: str) -> PreparedStatementInfo:
+        to_send = self._protocol.do_create_prepared_statement(name=name, query_text=query)
+        await self._write(to_send)
+        return await self._wait_for_message(PreparedStatementInfo)
+
     async def create_prepared_statement(self, name: str, query: str) -> PreparedStatementInfo:
         """
         Creates a prepared statement. This is part of the low-level query API.
@@ -269,9 +275,8 @@ class AsyncPostgresConnection:
         :param query: The query to use.
         """
 
-        to_send = self._protocol.do_create_prepared_statement(name=name, query_text=query)
-        await self._write(to_send)
-        return await self._wait_for_message(PreparedStatementInfo)
+        with self._protocol_guard:
+            return await self._do_create_prepared_statement(name=name, query=query)
 
     async def lowlevel_query(
         self,
@@ -285,7 +290,7 @@ class AsyncPostgresConnection:
         values in order to get the messages returned from the server.
         """
 
-        async with self._query_lock:
+        with self._protocol_guard:
             # always wait until ready! we do not like getting random messages from the last client
             # intermixed
             if not self._protocol.ready:
@@ -305,7 +310,7 @@ class AsyncPostgresConnection:
                 if not isinstance(query, PreparedStatementInfo):
                     real_query, new_params = convert_paramstyle(query, kwargs)
                     params = params + new_params
-                    info = await self.create_prepared_statement(name="", query=real_query)
+                    info = await self._do_create_prepared_statement(name="", query=real_query)
                 else:
                     info = query
 

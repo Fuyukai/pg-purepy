@@ -37,9 +37,14 @@ finer control of the actual messages arriving.
 
 .. warning::
 
-    Querying to the server is protected by a lock, as only one query can be issued at once. Allowing
-    multiple queries simultaneously would require complex tracking logic for incoming messages, and
-    wouldn't help anyway because the server only processes one query at a time.
+    Querying the server is always protected by a :class:`anyio.ResourceGuard`. Attempting to use
+    the same connection simultaneously for two queries will raise a
+    :class:`anyio.BrokenResourceError`.
+
+.. versionchanged:: 0.12.0
+
+    Changed the previous query lock to a conflict detector. This prevents nested queries from
+    deadlocking.
 
 Querying, Eagerly
 -----------------
