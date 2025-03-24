@@ -360,7 +360,8 @@ class AsyncPostgresConnection:
 
         This is an asynchronous context manager that yields a :class:`.QueryResult`, that can
         be asynchronously iterated over for the data rows of the query. Once all data rows have
-        been iterated over, you can call :meth:`~.QueryResult.row_count` to get the total row count.
+        been iterated over, you can call :meth:`.QueryResult.consume_all` to get the total row
+        count.
 
         If ``max_rows`` is specified, then the query will only return up to that many rows.
         Otherwise, an unlimited amount may potentially be returned.
