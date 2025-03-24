@@ -108,8 +108,6 @@ class NeedData:
     Special sentinel object returned to signify the state machine needs more data,
     """
 
-    pass
-
 
 #: Special singleton sentinel returned to signify the state machine needs more data.
 NEED_DATA = NeedData()
@@ -471,7 +469,7 @@ class SansIOClient:
         field_count = body.read_short()
         fields: list[ColumnDescription] = []
 
-        for _i in range(0, field_count):
+        for _i in range(field_count):
             name = body.read_cstring(encoding=self.encoding)
             table_oid = body.read_int()
             column_idx = body.read_short()
@@ -508,7 +506,7 @@ class SansIOClient:
         column_values: list[Any | None] = []
         count = body.read_short()
 
-        for idx in range(0, count):
+        for idx in range(count):
             size = body.read_int()
 
             # -1 size means null.
@@ -809,7 +807,7 @@ class SansIOClient:
         """
         if code == BackendMessageCode.PARAMETER_DESCRIPTION:
             count = body.read_short()
-            oids = [body.read_int() for _ in range(0, count)]
+            oids = [body.read_int() for _ in range(count)]
             self._last_parameter_oids = oids
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_PARAMETER_DESCRIPTION
             return ParameterDescription(oids)
@@ -1025,7 +1023,7 @@ class SansIOClient:
         ### Bind: Number of parameter format codes.
         packet_body_1 += struct.pack(">h", wanted_params)
         ### Bind: Parameter format codes.
-        for _ in range(0, wanted_params):
+        for _ in range(wanted_params):
             packet_body_1 += struct.pack(">h", 0)
 
         ### Bind: Number of parameter values.
@@ -1053,7 +1051,7 @@ class SansIOClient:
         wanted_results = len(info.row_description.columns) if info.row_description else 0
 
         packet_body_1 += struct.pack(">h", wanted_results)
-        for _ in range(0, wanted_results):
+        for _ in range(wanted_results):
             packet_body_1 += struct.pack(">h", 0)
 
         full_packet = FrontendMessageCode.BIND.to_bytes(length=1, byteorder="big")

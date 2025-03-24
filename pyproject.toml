@@ -74,24 +74,41 @@ preview = true
 
 [tool.ruff.lint]
 select = [
-  "RUF",
-  "F",
-  "E",
-  "W",
-  "I",
-  "UP",
-  "B",
-  "YTT",
-  "ASYNC",
-  "PYI",
-  "SIM",
-  "RET",
-  "PERF",
+    "RUF",
+    "F",
+    "E",
+    "W",
+    "I",
+    "UP",
+    "B",
+    "Q",
+    "YTT",
+    "PYI",
+    "SIM",
+    "RET",
+    "PERF",
+    "PIE",
+    "SIM",
+    "C4",
+    "FA",
+    "ICN",
+    "PYI",
+    "PT",
+    "RET",
+
+    # specific docstring rules
+    "D201",
+    "D204",
+    "D211",
+    "D419", # less ugly docstrings
 ]
 ignore = [
-    "W291",
-    "W293",
-    "E266"
+    "W291", "W293",
+    "UP038",  # Slower than isinstance(thing, tuple)?
+    "RUF036",
+    "SIM108",
+    "W391",
+    "E266",  # Used to delimit things
 ]
 
 [tool.ruff.lint.isort]

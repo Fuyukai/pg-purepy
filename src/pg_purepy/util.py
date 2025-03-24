@@ -26,7 +26,7 @@ class Buffer:
 
     def read_bytes(self, count: int) -> bytearray:
         ba = bytearray()
-        for _x in range(0, count):
+        for _x in range(count):
             ba.append(self.data.popleft())
 
         return ba

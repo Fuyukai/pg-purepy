@@ -70,7 +70,7 @@ class PooledDatabaseInterface:
     async def _start(self, count: int) -> None:
         logger.debug("Opening pooled connections", count=count)
 
-        for _ in range(0, count):
+        for _ in range(count):
             await self._open_new_connection()
 
     @property
