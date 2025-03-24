@@ -13,7 +13,6 @@ from ssl import SSLContext
 from typing import (
     Any,
     Self,
-    TypeVar,
     final,
     override,
 )
@@ -52,8 +51,6 @@ from pg_purepy.protocol import (
 )
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(name=__name__)
-
-T = TypeVar("T")
 
 
 class RollbackTimeoutError(PostgresqlError):
@@ -235,7 +232,7 @@ class AsyncPostgresConnection:
                     err = wrap_error(message)
                     raise err
 
-    async def _wait_for_message(self, typ: type[T], *, wait_until_ready: bool = True) -> T:
+    async def _wait_for_message[T](self, typ: type[T], *, wait_until_ready: bool = True) -> T:
         """
         Waits until a message of type ``typ`` arrives.
 
