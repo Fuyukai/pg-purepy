@@ -419,7 +419,7 @@ async def test_seen_rows() -> None:
 
     async with (
         open_connection() as conn,
-        conn.query("select * from ( values (1), (2), (3))") as query,
+        conn.query("select * from ( values (1), (2), (3)) as d;") as query,
     ):
         assert query.seen_rows == 0
         it = aiter(query)
@@ -486,7 +486,7 @@ async def test_query_result_with_errors():
     # wow, 5 levels of indentation
     async with open_connection() as conn:
         with suppress(ValueError):
-            async with conn.query("select * from ( values (1), (2), (3))") as next:
+            async with conn.query("select * from ( values (1), (2), (3)) as d") as next:
                 async for i in next:
                     assert i.data[0] == 1
                     raise ValueError
@@ -495,7 +495,7 @@ async def test_query_result_with_errors():
 
 
 async def test_attempting_nested_queries():
-    async with open_connection() as conn, conn.query("select * from ( values (3), (4));") as q:
+    async with open_connection() as conn, conn.query("select * from ( values (3), (4)) as d;") as q:
         async for _ in q:
             with pytest.raises(BusyResourceError):
                 await conn.fetch_one("select 2;")
