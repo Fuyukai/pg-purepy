@@ -49,6 +49,14 @@ The connection pool object has a similar high-level query API to the mid-level A
 
 .. automethod:: pg_purepy.PooledDatabaseInterface.fetch_one
 
+.. automethod:: pg_purepy.PooledDatabaseInterface.fetch_one_or_none
+
+
+If you wish to use a connection from the pool directly, use
+:meth:`.PooledDatabaseInterface.checkout_connection`.
+
+.. automethod:: pg_purepy.PooledDatabaseInterface.checkout_connection
+
 Transactions
 ------------
 

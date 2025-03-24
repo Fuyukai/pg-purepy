@@ -1,6 +1,16 @@
 Changelog
 =========
 
+0.12.0 (Unreleased)
+-------------------
+
+- :meth:`.PooledDatabaseInterface.checkout_connection` is now public for checking out a connection
+  outside of a transaction.
+
+- :class:`.DataRow` is now a ``Sequence``.
+
+- (Re)added :meth:`.AsyncPostgresConnection.fetch_one_or_none`.
+
 0.11.1 (2024-07-30)
 -------------------
 

@@ -54,12 +54,14 @@ but they are all *eager* functions and load the entire returned dataset into mem
 
 .. automethod:: pg_purepy.connection.AsyncPostgresConnection.fetch_one
 
+.. automethod:: pg_purepy.connection.AsyncPostgresConnection.fetch_one_or_none
+
 For example, to insert some data, check how many rows were inserted, and verify it with a select:
 
 .. code-block:: python3
 
     async with open_database_connection(...) as conn:
-        inserted = await conn.execute("insert into some_table(...) values (...);")
+        inserted = await conn.execute("insert into some_table (...) values (...);")
         print(f"Inserted {inserted} rows")
         row = await conn.fetch_one("select count(*) from some_table;")
         assert row.data[0] == inserted
@@ -91,12 +93,6 @@ Example usage:
 
         print("Total rows:", await query.row_count())
 
-
-.. warning::
-
-    Exiting from the asynchronous generator early will require the next query issued to keep
-    reading the data rows of the previous query until the query returned. Use limits, or cursors,
-    for particularly large queries.
 
 .. warning::
 
@@ -133,6 +129,7 @@ passed to the function.
 
         inserted = await conn.execute("insert into some_table(foo) values ($0, $1);",
                                       x, y)
+
 
 Low-level querying
 ------------------
@@ -175,7 +172,6 @@ If you execute a significant number of the same query, a pre-created prepared st
 can be used instead of the implicit one created when performing queries with parameters.
 
 .. automethod:: pg_purepy.connection.AsyncPostgresConnection.create_prepared_statement
-
 
 Error handling
 --------------

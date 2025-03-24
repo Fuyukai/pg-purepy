@@ -339,7 +339,7 @@ class AsyncPostgresConnection:
         Mid-level query API.
 
         The ``query`` parameter can either be a string or a :class:`~.PreparedStatementInfo`, as
-        returned from :func:`.AsyncPostgresConnection.create_prepared_statement`. If it is a
+        returned from :meth:`.AsyncPostgresConnection.create_prepared_statement`. If it is a
         string, and it has parameters, they must be provided as keyword arguments.
         If it is a pre-prepared statement, and it has parameters, they must be provided as
         positional arguments.
