@@ -1,5 +1,3 @@
-# flake8: noqa
-
 from pg_purepy.connection import (
     AsyncPostgresConnection as AsyncPostgresConnection,
     QueryResult as QueryResult,
@@ -8,24 +6,25 @@ from pg_purepy.connection import (
 )
 from pg_purepy.conversion import (
     Converter as Converter,
-    SimpleFunctionConverter as SimpleFunctionConverter,
     EnumConverter as EnumConverter,
+    SimpleFunctionConverter as SimpleFunctionConverter,
 )
 from pg_purepy.exc import (
-    PostgresqlError as PostgresqlError,
     ConnectionForciblyKilledError as ConnectionForciblyKilledError,
-    ProtocolParseError as ProtocolParseError,
-    MissingPasswordError as MissingPasswordError,
-    UnknownMessageError as UnknownMessageError,
-    IllegalStateError as IllegalStateError,
     ConnectionInTransactionWarning as ConnectionInTransactionWarning,
+    IllegalStateError as IllegalStateError,
+    MissingPasswordError as MissingPasswordError,
     MissingRowError as MissingRowError,
+    PostgresqlError as PostgresqlError,
+    ProtocolParseError as ProtocolParseError,
+    UnknownMessageError as UnknownMessageError,
 )
 from pg_purepy.messages import (
+    ColumnDescription as ColumnDescription,
     ErrorOrNoticeResponse as ErrorOrNoticeResponse,
     ErrorResponseFieldType as ErrorResponseFieldType,
+    RecoverableDatabaseError as RecoverableDatabaseError,
     RowDescription as RowDescription,
-    ColumnDescription as ColumnDescription,
     UnrecoverableDatabaseError as UnrecoverableDatabaseError,
 )
 from pg_purepy.pool import (
