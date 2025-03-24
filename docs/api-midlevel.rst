@@ -108,6 +108,7 @@ Paramaterised Queries
 
 Parameterised queries are also supported, using either positional arguments or keyword arguments,
 in either eager loading mode or lazy loading mode.
+
 Positional argument parameters follow the PostgreSQL parameter syntax, where parameters are
 specified with ``$N`` where N is the index of the parameter. Keyword argument parameters follow the
 DBAPI colon-named syntax, where parameters are specified with ``:name`` where name is the keyword
@@ -166,6 +167,15 @@ For most queries, this function will yield the following sequence of messages, i
 - One :class:`.CommandComplete` instance.
 
 The last message will always be a :class:`.CommandComplete` instance.
+
+Prepared Statements
+-------------------
+
+If you execute a significant number of the same query, a pre-created prepared statement instance
+can be used instead of the implicit one created when performing queries with parameters.
+
+.. automethod:: pg_purepy.connection.AsyncPostgresConnection.create_prepared_statement
+
 
 Error handling
 --------------
