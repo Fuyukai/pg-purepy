@@ -27,16 +27,16 @@ PostgreSQL core types.
 Date/Time types
 ~~~~~~~~~~~~~~~
 
-- ``TIMESTAMP WITH TIMEZONE`` is mapped to :class:`~whenever.OffsetDatetime`.
-- ``TIMESTAMP WITHOUT TIMEZONE`` is mapped to :class:`~whenever.NaiveDatetime`.
+- ``TIMESTAMP WITH TIMEZONE`` is mapped to :class:`~whenever.OffsetDateTime`.
+- ``TIMESTAMP WITHOUT TIMEZONE`` is mapped to :class:`~whenever.LocalDateTime`.
 - ``DATE`` is mapped to :class:`datetime.date`.
 - ``TIME WITHOUT TIMEZONE`` is mapped to :class:`datetime.time`. ``TIME WITH TIMEZONE``
   `isn't supported <https://wiki.postgresql.org/wiki/Don%27t_Do_This#Don.27t_use_timetz>`__.
 
 .. note::
 
-    I use Whenever over the vanilla ``datetime`` objects because I don't like ``datetime``. Write
-    your own converter if you disagree with me.
+    Despite the name, PostgreSQL does not store timestamps using timezones. Instead, timestamps are
+    converted to and from UTC during storage/retrieval based on PostgreSQL's server-set timezone.
 
 Enumeration types
 ~~~~~~~~~~~~~~~~~
