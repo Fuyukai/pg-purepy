@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Literal, override
 
-import dateutil
 import dateutil.parser
 import whenever
 
