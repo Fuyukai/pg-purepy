@@ -272,7 +272,7 @@ class PooledDatabaseInterface:
                         self._raw_connections.remove(checkout.conn)
                         await checkout.sock.aclose()
                     finally:
-                        self._nursery.start_soon(self._open_new_connection)
+                        self._nursery.start_soon(self._open_new_connection)  # type: ignore
             else:
                 try:
                     self._write.send_nowait(checkout)

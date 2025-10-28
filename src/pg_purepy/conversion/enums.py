@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, EnumMeta
 from typing import TYPE_CHECKING, cast, override
 
 from pg_purepy.conversion.abc import Converter
@@ -32,7 +32,7 @@ class EnumConverter[T: Enum](Converter[T]):
                                 enum convention.
         """
         self.oid = oid
-        self._member_klass = enum_klass
+        self._member_klass: EnumMeta = cast(EnumMeta, enum_klass)
         self._use_members = use_member_values
         self._lowercase_names = lowercase_names
 

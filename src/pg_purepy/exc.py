@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Self, override
+from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
     from pg_purepy.connection import AsyncPostgresConnection
@@ -25,7 +24,7 @@ class ConnectionForciblyKilledError(PostgresqlError):
     def __str__(self) -> str:
         return f"Connection {self._conn!r} could not send the Terminate message"
 
-    __repr__: Callable[[Self], str] = __str__
+    __repr__ = __str__
 
 
 class ProtocolParseError(PostgresqlError):

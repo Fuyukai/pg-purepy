@@ -38,8 +38,9 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.14.2",
     "ujson>=5.10.0",
-    "pyright>=1.1.407",
     "pytest>=8.4.2",
+    "pyrefly>=0.39.1",
+    "types-python-dateutil>=2.9.0.20251008",
 ]
 
 
@@ -110,12 +111,9 @@ ignore = [
 [tool.ruff.lint.isort]
 combine-as-imports = true
 
-[tool.pyright]
-pythonVersion = "3.13"
-include = ["src", "tests"]
-typeCheckingMode = "strict"
-
-reportImplicitOverride = "warning"
-reportUnusedVariable = false
-reportIncompatibleVariableOverride = false
-reportPrivateUsage = false
+[tool.pyrefly]
+project-includes = [
+    "src",
+]
+python-version = "3.13.0"
+infer-with-first-use = false

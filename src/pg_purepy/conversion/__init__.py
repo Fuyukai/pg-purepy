@@ -7,7 +7,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Sequence
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 try:
     from ujson import dumps, loads as json_loads
@@ -53,7 +53,9 @@ def _make_array_converters[T](
 
 
 KNOWN_INT_OIDS = (20, 21, 23, 26, 27, 28, 29)
-INT_CONVERTERS = [SimpleFunctionConverter(oid, int, str) for oid in KNOWN_INT_OIDS]
+INT_CONVERTERS: list[Converter[Any]] = [
+    SimpleFunctionConverter(oid, int, str) for oid in KNOWN_INT_OIDS
+]
 KNOWN_INTA_OIDS = (1016, 1005, 1007, 1028, 1010, 1011, 1012)
 INTA_CONVERTERS = _make_array_converters(KNOWN_INTA_OIDS, INT_CONVERTERS)
 

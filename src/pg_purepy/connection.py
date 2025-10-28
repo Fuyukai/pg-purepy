@@ -388,9 +388,13 @@ class AsyncPostgresConnection:
                 await self._stream.aclose()
                 self._dead = True
 
-            raise RollbackTimeoutError(
+            e = RollbackTimeoutError(
                 "Failed to rollback transaction in time, forcibly closing connection"
-            ) from exc
+            )
+            if exc:
+                raise e from exc
+
+            raise e
 
     @asynccontextmanager
     async def with_transaction(self) -> AsyncGenerator[None]:

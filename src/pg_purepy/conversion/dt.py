@@ -53,9 +53,15 @@ class TimestampTzConverter(Converter[PostgresTimestampTz]):
             case whenever.OffsetDateTime():
                 return data.format_iso()
 
+            case _:
+                raise NotImplementedError("pyrefly nonsense")
+
 
 STATIC_TIMESTAMPTZ_CONVERTER = TimestampTzConverter()
-STATIC_TIMESTAMPTZA_CONVERTER = ArrayConverter(118, STATIC_TIMESTAMPTZ_CONVERTER)
+# this is a bug but I couldn't repro it on the playground...
+STATIC_TIMESTAMPTZA_CONVERTER: ArrayConverter[PostgresTimestampTz] = ArrayConverter(
+    118, STATIC_TIMESTAMPTZ_CONVERTER
+)
 
 
 class TimestampNoTzConverter(Converter[PostgresTimestampWithoutTz]):
@@ -94,9 +100,14 @@ class TimestampNoTzConverter(Converter[PostgresTimestampWithoutTz]):
             case whenever.PlainDateTime():
                 return data.format_iso()
 
+            case _:
+                raise NotImplementedError("pyrefly")
+
 
 STATIC_TIMESTAMPNOTZ_CONVERTER = TimestampNoTzConverter()
-STATIC_TIMESTAMPNOTZA_CONVERTER = ArrayConverter(1115, STATIC_TIMESTAMPNOTZ_CONVERTER)
+STATIC_TIMESTAMPNOTZA_CONVERTER: ArrayConverter[PostgresTimestampWithoutTz] = ArrayConverter(
+    1115, STATIC_TIMESTAMPNOTZ_CONVERTER
+)
 
 
 class DateConverter(Converter[datetime.date]):
