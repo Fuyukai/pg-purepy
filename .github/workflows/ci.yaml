@@ -23,6 +23,7 @@ jobs:
               uses: pdm-project/setup-pdm@v4
               with:
                 cache: true
+                cache-dependency-path: pylock.toml
 
             - name: "Install project"
               run: pdm install --dev
@@ -63,6 +64,7 @@ jobs:
               uses: pdm-project/setup-pdm@v4
               with:
                 cache: true
+                cache-dependency-path: pylock.toml
 
             - name: "Install project"
               run: pdm install --dev
