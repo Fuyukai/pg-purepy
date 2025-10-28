@@ -18,7 +18,7 @@ from importlib.metadata import version as get_version
 # -- Project information -----------------------------------------------------
 
 project = "pg-purepy"
-copyright = "2021-2023, Lura Skye"
+copyright = "2021-2025, Lura Skye"
 author = "Lura Skye"
 
 # The full version, including alpha/beta/rc tags
@@ -57,7 +57,7 @@ nitpicky = True
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -67,8 +67,10 @@ html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
 
 html_theme_options = {
-    "collapse_navigation": False,
-    "style_external_links": True,
+    "light_css_variables": {
+        "font-stack": "B612,sans-serif",
+        "font-stack--monospace": "Iosevka SS14, Iosevka, JetBrains Mono, monospace",
+    },
 }
 
 # -- Other options --

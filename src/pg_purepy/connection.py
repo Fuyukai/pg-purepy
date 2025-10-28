@@ -61,8 +61,9 @@ class RollbackTimeoutError(PostgresqlError):
 
 class AsyncPostgresConnection:
     """
-    An asynchronous connection to a PostgreSQL server. This class should not be directly
-    instantiated; instead, use :func:`.open_database_connection`.
+    An asynchronous connection to a PostgreSQL server. See method documentation for more info.
+
+    This class should not be directly instantiated; instead, use :func:`.open_database_connection`.
     """
 
     def __init__(
@@ -97,22 +98,25 @@ class AsyncPostgresConnection:
     @property
     def ready(self) -> bool:
         """
-        Returns if this connection is ready for another query.
+        If this connection is ready to send another query.
         """
+
         return self._protocol.ready
 
     @property
     def in_transaction(self) -> bool:
         """
-        Returns if this connection is currently in a transaction.
+        If this connection is currently in a SQL transaction.
         """
+
         return self._protocol.in_transaction
 
     @property
     def dead(self) -> bool:
         """
-        Returns if this connection is dead or otherwise unusable.
+        If this connection is unusable.
         """
+
         if self._dead:
             return True
 
@@ -121,7 +125,10 @@ class AsyncPostgresConnection:
     @property
     def connection_parameters(self) -> Mapping[str, str]:
         """
-        Returns a read-only view of the current connection;
+        A read-only view of the current "connection parameters".
+
+        This is a set of global variables set across a single PostgreSQL connection that control
+        options such as the timezone or locale.
         """
 
         return types.MappingProxyType(self._protocol.connection_params)
@@ -129,7 +136,7 @@ class AsyncPostgresConnection:
     @property
     def server_timezone(self) -> str:
         """
-        Returns the timezone of the server.
+        The raw timezone for this connection.
         """
 
         return self._protocol.timezone
@@ -160,18 +167,10 @@ class AsyncPostgresConnection:
             raise
 
     async def _do_startup(self) -> None:
-        """
-        Sends the startup message.
-        """
-
         data = self._protocol.do_startup()
         await self._write(data)
 
     async def _terminate(self) -> None:
-        """
-        Terminates the protocol. Does not close the connection.
-        """
-
         data = self._protocol.do_terminate()
         await self._write(data)
         self._dead = True
@@ -179,13 +178,6 @@ class AsyncPostgresConnection:
     async def _read_until_ready(
         self,
     ) -> AsyncGenerator[ErrorOrNoticeResponse | PostgresMessage | NeedData]:
-        """
-        Yields events until the connection is ready. This is an asynchronous generator. You can
-        discard events you don't care about.
-
-        This must ONLY be called if the protocol is NOT ready.
-        """
-
         if self._protocol.ready:
             await anyio.lowlevel.checkpoint()
             return
@@ -203,14 +195,14 @@ class AsyncPostgresConnection:
 
                 elif isinstance(next_event, BackendKeyData):
                     self._logger = self._logger.bind(pid=next_event.pid)
-                    logger.debug("Received BackendKeyData")
+                    logger.debug("BackendKeyData")
                     self._secret_key = next_event.secret_key
                     self._pid = next_event.pid
 
                 yield next_event
 
                 if isinstance(next_event, ReadyForQuery):
-                    await anyio.lowlevel.checkpoint()  # checkpoint()
+                    await anyio.lowlevel.checkpoint()
                     return
 
             to_send = self._protocol.get_needed_synchronisation()
@@ -222,8 +214,9 @@ class AsyncPostgresConnection:
 
     async def wait_until_ready(self) -> None:
         """
-        Waits until the connection is ready. This discards all events. Useful in the authentication
-        loop.
+        Waits until the connection is ready.
+
+        This will discard all other events on the connection.
         """
 
         async with aclosing(self._read_until_ready()) as gen:
@@ -237,7 +230,7 @@ class AsyncPostgresConnection:
         Waits until a message of type ``typ`` arrives.
 
         This will wait until the ReadyForQuery message arrives to avoid requiring extra
-        synchronisation, if ``wait_until_ready`` is True. If it never arrives, this will deadlock!
+        synchronisation if ``wait_until_ready`` is True. If it never arrives, this will deadlock!
         """
 
         message_found = None
@@ -283,8 +276,10 @@ class AsyncPostgresConnection:
         **kwargs: dict[str, Any],
     ) -> AsyncGenerator[QueryResultMessage]:
         """
-        Performs a query to the server. This is an asynchronous generator; you must iterate over
-        values in order to get the messages returned from the server.
+        Performs a query to the server.
+
+        This is an *asynchronous generator*; it lazily fetches raw messages from the server without
+        processing. You almost definitely want to use :meth:`.query` instead.
         """
 
         with self._protocol_guard:
@@ -344,9 +339,9 @@ class AsyncPostgresConnection:
 
         The ``query`` parameter can either be a string or a :class:`~.PreparedStatementInfo`, as
         returned from :meth:`.AsyncPostgresConnection.create_prepared_statement`. If it is a
-        string, and it has parameters, they must be provided as keyword arguments.
-        If it is a pre-prepared statement, and it has parameters, they must be provided as
-        positional arguments.
+        string, and it has parameters, they can be provided as either positional arguments or
+        as keyword arguments. If it is a pre-prepared statement, and it has parameters,
+        they must be provided as positional arguments.
 
         If keyword arguments are provided or a prepared statement is passed, an extended query with
         secure argument parsing will be used. Otherwise, a simple query will be used, which saves
@@ -362,6 +357,11 @@ class AsyncPostgresConnection:
 
         If ``max_rows`` is specified, then the query will only return up to that many rows.
         Otherwise, an unlimited amount may potentially be returned.
+
+        If this connection is currently executing another query, this method will raise a
+        :class:`anyio.BusyResourceError`. The same is true of all other query methods that call
+        this function; be sure to protect this type with a lock or use a connection pool for
+        multiple simultaneous connections.
         """
 
         async with aclosing(
@@ -394,6 +394,7 @@ class AsyncPostgresConnection:
         Asynchronous context manager that automatically opens and closes a transaction.
         """
 
+        # TODO: this can be done at the type level?
         if self._block_transactions:
             raise ValueError(
                 "This connection was already checked out from a pool in a "
@@ -420,8 +421,7 @@ class AsyncPostgresConnection:
         """
         Eagerly fetches the result of a query. This returns a list of :class:`~.DataRow` objects.
 
-        If you wish to lazily load the results of a query, use
-        :meth:`.query` instead.
+        If you wish to lazily load the results of a query, use :meth:`.query` instead.
 
         :param query: Either a :class:`str` that contains the query text,
                       or a :class:`~.PreparedStatementInfo` that represents a pre-prepared query.
@@ -487,8 +487,12 @@ class AsyncPostgresConnection:
 @final
 class QueryResult(AsyncIterator[DataRow]):
     """
-    Wraps the execution of a query. This can be asynchronously iterated over in order to get
-    incoming data rows.
+    Wraps the extended result of a query.
+
+    This is an *asynchronous iterator*; rows are retrieved with an ``async for``. The number of
+    rows seen by the iterator so far can be found with the ``seen_rows`` field, or the total number
+    of rows can be eagerly fetched with :meth:`.consume_all` (but this will discard any further
+    data rows).
     """
 
     _iterator: AsyncIterator[PostgresMessage] = attrs.field(alias="iterator")
@@ -528,8 +532,9 @@ class QueryResult(AsyncIterator[DataRow]):
         if self._total_row_count >= 0:
             await anyio.lowlevel.checkpoint()
 
-        async for _ in self:
-            pass
+        else:
+            async for _ in self:
+                pass
 
         return self._total_row_count
 

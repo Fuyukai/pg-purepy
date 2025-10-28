@@ -28,7 +28,7 @@ Date/Time types
 ~~~~~~~~~~~~~~~
 
 - ``TIMESTAMP WITH TIMEZONE`` is mapped to :class:`~whenever.OffsetDateTime`.
-- ``TIMESTAMP WITHOUT TIMEZONE`` is mapped to :class:`~whenever.LocalDateTime`.
+- ``TIMESTAMP WITHOUT TIMEZONE`` is mapped to :class:`~whenever.PlainDateTime`.
 - ``DATE`` is mapped to :class:`datetime.date`.
 - ``TIME WITHOUT TIMEZONE`` is mapped to :class:`datetime.time`. ``TIME WITH TIMEZONE``
   `isn't supported <https://wiki.postgresql.org/wiki/Don%27t_Do_This#Don.27t_use_timetz>`__.

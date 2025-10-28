@@ -32,8 +32,7 @@ docs = [
     "sphinx>=8.2.3",
     "sphinx-inline-tabs>=2023.4.21",
     "sphinx-autodoc-typehints>=2.5.0",
-    "sphinxcontrib-jquery>=4.1",
-    "sphinx-rtd-theme>=3.0.1",
+    "furo>=2025.9.25",
 ]
 dev = [
     "trio>=0.27.0",
@@ -44,9 +43,6 @@ dev = [
     "pytest>=8.4.2",
 ]
 
-
-[tool.pdm.build]
-includes = []
 
 [tool.pytest.ini_options]
 log_cli_level = "DEBUG"

@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.12.0 (Unreleased)
+0.12.0 (2025-10-28)
 -------------------
 
 - :meth:`.PooledDatabaseInterface.checkout_connection` is now public for checking out a connection
@@ -16,6 +16,8 @@ Changelog
 
 - The connection now uses a conflict detector instead of a lock to prevent nested queries from
   deadlocking.
+
+- Another fix for a newer ``whenever`` version.
 
 0.11.1 (2024-07-30)
 -------------------

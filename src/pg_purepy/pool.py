@@ -41,6 +41,9 @@ class OpenedConnection:
 class PooledDatabaseInterface:
     """
     Connection pool based PostgreSQL interface.
+
+    This is the API you should prefer for any real application as the single connection class
+    *cannot* be used for concurrent access to the database.
     """
 
     def __init__(
@@ -215,6 +218,12 @@ class PooledDatabaseInterface:
     ) -> AsyncIterator[AsyncPostgresConnection]:
         """
         Checks out a single connection from the connection pool.
+
+        This is an *asynchronous context manager* that will automatically clean up the connection
+        once the context manager block exits.
+
+        If ``start_new_transaction`` is True, this will issue a new transaction before yielding
+        the connection.
         """
 
         checkout = await self._read.receive()
@@ -295,8 +304,7 @@ class PooledDatabaseInterface:
     @asynccontextmanager
     async def checkout_in_transaction(self) -> AsyncGenerator[AsyncPostgresConnection]:
         """
-        Checks out a new connection that automatically runs a transaction. This method MUST be used
-        if you wish to execute something in a transaction.
+        Shortcut for ``checkout_connection(start_new_transaction=True)``.
         """
 
         async with self.checkout_connection(start_new_transaction=True) as conn:
@@ -361,22 +369,29 @@ class PooledDatabaseInterface:
             conn.add_converter(converter)
 
     async def add_converter_using(
-        self, fn: Callable[[AsyncPostgresConnection], Awaitable[Converter[Any] | None]]
+        self,
+        fn: Callable[[AsyncPostgresConnection], Awaitable[Converter[Any] | None]],
+        with_array: bool = False,
     ) -> None:
         """
-        Adds a converter using the specified async function. Useful primarily for extension types
-        where the oids aren't fixed.
+        Adds a converter using the specified async function.
+
+        This is useful for dealing with PostgreSQL extensions that register custom types, where
+        the OID of such types is not fixed and needs to be collected at runtime.
         """
 
         async with self.checkout_connection() as conn:
             converter = await fn(conn)
 
         if converter is not None:
-            self.add_converter(converter)
+            if with_array:
+                await self.add_converter_with_array(converter)
+            else:
+                self.add_converter(converter)
 
     async def add_converter_with_array(self, converter: Converter[Any], **kwargs: Any) -> None:
         """
-        Registers a converter, and adds the array type converter to it too.
+        Registers a converter and also registers the converter for arrays of its type.
         """
 
         self.add_converter(converter)
