@@ -47,7 +47,7 @@ class AuthenticationRequest(PostgresMessage):
     md5_salt: bytearray | None = attrs.field(default=None)
 
     #: When doing SASL authentication, the list of authentication methods.
-    sasl_methods: list[str] = attrs.field(factory=list)
+    sasl_methods: list[str] = attrs.field(factory=lambda: [])
 
 
 @attrs.define()

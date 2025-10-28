@@ -7,17 +7,17 @@ authors = [
     {name = "Lura Skye", email = "fuyukaii@proton.me"},
 ]
 license = {text = "LGPL-3.0-or-later"}
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "scramp>=1.4.5",
-    "attrs>=24.2.0",
+    "attrs>=25.4.0",
     "python-dateutil>=2.9.0.post0",
-    "anyio>=4.9.0",
+    "anyio>=4.11.0",
     "structlog>=24.4.0",
-    "whenever>=0.6.9",
+    "whenever>=0.9.3",
 ]
 name = "pg-purepy"
-version = "0.11.1"
+version = "0.12.0"
 description = "A pure-Python anyio-based PostgreSQL adapter."
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -37,11 +37,11 @@ docs = [
 ]
 dev = [
     "trio>=0.27.0",
-    "pytest-cov>=6.0.0",
-    "ruff>=0.11.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.2",
     "ujson>=5.10.0",
-    "pyright>=1.1.397",
-    "pytest>=8.3.3",
+    "pyright>=1.1.407",
+    "pytest>=8.4.2",
 ]
 
 
@@ -64,7 +64,7 @@ exclude_lines = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 respect-gitignore = true
 # fix = true
 src = ["src/pg_purepy", "tests"]
@@ -104,18 +104,19 @@ select = [
 ]
 ignore = [
     "W291", "W293",
-    "UP038",  # Slower than isinstance(thing, tuple)?
     "RUF036",
     "SIM108",
     "W391",
     "E266",  # Used to delimit things
+    # Fucking pyright
+    "PIE807"
 ]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
 
 [tool.pyright]
-pythonVersion = "3.12"
+pythonVersion = "3.13"
 include = ["src", "tests"]
 typeCheckingMode = "strict"
 

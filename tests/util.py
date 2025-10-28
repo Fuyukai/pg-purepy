@@ -12,7 +12,7 @@ POSTGRES_DATABASE = os.environ.get("POSTGRES_DATABASE", "postgres")
 
 
 @asynccontextmanager
-async def open_connection() -> AsyncGenerator[AsyncPostgresConnection, None]:
+async def open_connection() -> AsyncGenerator[AsyncPostgresConnection]:
     async with open_database_connection(
         address_or_path=POSTGRES_ADDRESS,
         port=POSTGRES_PORT,

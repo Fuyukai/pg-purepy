@@ -293,7 +293,7 @@ class PooledDatabaseInterface:
 
     ## High-level methods. ##
     @asynccontextmanager
-    async def checkout_in_transaction(self) -> AsyncGenerator[AsyncPostgresConnection, None]:
+    async def checkout_in_transaction(self) -> AsyncGenerator[AsyncPostgresConnection]:
         """
         Checks out a new connection that automatically runs a transaction. This method MUST be used
         if you wish to execute something in a transaction.
@@ -411,7 +411,7 @@ async def open_pool(
     password: str | None = None,
     database: str | None = None,
     ssl_context: SSLContext | None = None,
-) -> AsyncGenerator[PooledDatabaseInterface, None]:
+) -> AsyncGenerator[PooledDatabaseInterface]:
     """
     Opens a new connection pool to a PostgreSQL server. This is an asynchronous context manager.
 

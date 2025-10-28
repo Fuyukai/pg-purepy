@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 type PostgresInfinity = Literal["infinity", "-infinity"]
 type PostgresTimestampTz = whenever.OffsetDateTime | PostgresInfinity
-type PostgresTimestampWithoutTz = whenever.LocalDateTime | PostgresInfinity
+type PostgresTimestampWithoutTz = whenever.PlainDateTime | PostgresInfinity
 
 
 class TimestampTzConverter(Converter[PostgresTimestampTz]):
@@ -35,7 +35,7 @@ class TimestampTzConverter(Converter[PostgresTimestampTz]):
         parsed = dateutil.parser.isoparse(data)
 
         # can't directly pass the datetime as it'll complain about UTC.
-        return whenever.OffsetDateTime.parse_rfc3339(parsed.isoformat())
+        return whenever.OffsetDateTime.parse_iso(parsed.isoformat())
 
     @override
     def to_postgres(
@@ -51,7 +51,7 @@ class TimestampTzConverter(Converter[PostgresTimestampTz]):
                 return "-infinity"
 
             case whenever.OffsetDateTime():
-                return data.format_common_iso()
+                return data.format_iso()
 
 
 STATIC_TIMESTAMPTZ_CONVERTER = TimestampTzConverter()
@@ -70,7 +70,7 @@ class TimestampNoTzConverter(Converter[PostgresTimestampWithoutTz]):
         if data == "infinity" or data == "-infinity":
             return data
 
-        return whenever.LocalDateTime.parse_common_iso(data)
+        return whenever.PlainDateTime.parse_iso(data)
 
     @override
     def to_postgres(self, context: ConversionContext, data: PostgresTimestampWithoutTz) -> str:
@@ -91,8 +91,8 @@ class TimestampNoTzConverter(Converter[PostgresTimestampWithoutTz]):
             case "-infinity":
                 return data
 
-            case whenever.LocalDateTime():
-                return data.format_common_iso()
+            case whenever.PlainDateTime():
+                return data.format_iso()
 
 
 STATIC_TIMESTAMPNOTZ_CONVERTER = TimestampNoTzConverter()

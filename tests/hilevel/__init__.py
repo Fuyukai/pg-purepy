@@ -13,7 +13,7 @@ from tests.util import (
 
 
 @asynccontextmanager
-async def open_pool(conn_count: int | None = None) -> AsyncGenerator[PooledDatabaseInterface, None]:
+async def open_pool(conn_count: int | None = None) -> AsyncGenerator[PooledDatabaseInterface]:
     async with _open_pool(
         connection_count=conn_count,
         address_or_path=POSTGRES_ADDRESS,

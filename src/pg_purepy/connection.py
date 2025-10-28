@@ -178,7 +178,7 @@ class AsyncPostgresConnection:
 
     async def _read_until_ready(
         self,
-    ) -> AsyncGenerator[ErrorOrNoticeResponse | PostgresMessage | NeedData, None]:
+    ) -> AsyncGenerator[ErrorOrNoticeResponse | PostgresMessage | NeedData]:
         """
         Yields events until the connection is ready. This is an asynchronous generator. You can
         discard events you don't care about.
@@ -281,7 +281,7 @@ class AsyncPostgresConnection:
         *params: str,
         max_rows: int | None = None,
         **kwargs: dict[str, Any],
-    ) -> AsyncGenerator[QueryResultMessage, None]:
+    ) -> AsyncGenerator[QueryResultMessage]:
         """
         Performs a query to the server. This is an asynchronous generator; you must iterate over
         values in order to get the messages returned from the server.
@@ -338,7 +338,7 @@ class AsyncPostgresConnection:
         *params: str,
         max_rows: int | None = None,
         **kwargs: Any,
-    ) -> AsyncGenerator[QueryResult, None]:
+    ) -> AsyncGenerator[QueryResult]:
         """
         Mid-level query API.
 
@@ -389,7 +389,7 @@ class AsyncPostgresConnection:
             ) from exc
 
     @asynccontextmanager
-    async def with_transaction(self) -> AsyncGenerator[None, None]:
+    async def with_transaction(self) -> AsyncGenerator[None]:
         """
         Asynchronous context manager that automatically opens and closes a transaction.
         """
@@ -618,7 +618,7 @@ async def open_database_connection(
     password: str | None = None,
     database: str | None = None,
     ssl_context: SSLContext | None = None,
-) -> AsyncGenerator[AsyncPostgresConnection, None]:
+) -> AsyncGenerator[AsyncPostgresConnection]:
     """
     Opens a new connection to the PostgreSQL database server. This is an asynchronous context
     manager.
