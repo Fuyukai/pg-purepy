@@ -12,7 +12,6 @@ from typing import Any, Literal, Self
 
 import anyio
 import attrs
-import structlog
 from anyio.abc import ByteStream, TaskGroup
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
@@ -28,8 +27,6 @@ from pg_purepy.messages import (
     DataRow,
     RecoverableDatabaseError,
 )
-
-logger: structlog.stdlib.BoundLogger = structlog.get_logger(name=__name__)
 
 
 @attrs.define()
@@ -71,8 +68,6 @@ class PooledDatabaseInterface:
         self._nursery = nursery
 
     async def _start(self, count: int) -> None:
-        logger.debug("Opening pooled connections", count=count)
-
         for _ in range(count):
             await self._open_new_connection()
 
@@ -105,8 +100,6 @@ class PooledDatabaseInterface:
         """
         Cancels the query running on this connection.
         """
-
-        logger.debug("Cancelling query", pid=conn._pid)
 
         sock = await _open_socket(conn._addr, port=conn._port, ssl_context=conn._ssl_context)
 
@@ -227,9 +220,6 @@ class PooledDatabaseInterface:
         """
 
         checkout = await self._read.receive()
-        logger.debug(
-            "Connection acquired", connections_available=self._read.statistics().current_buffer_used
-        )
 
         if checkout.conn.in_transaction:
             warnings.warn(
@@ -257,7 +247,7 @@ class PooledDatabaseInterface:
 
         except anyio.get_cancelled_exc_class():
             # open a new conn to psql and cancel the query
-            with anyio.move_on_after(delay=5.0, shield=True) as scope:
+            with anyio.move_on_after(delay=5.0, shield=True) as _:
                 await self._cancel_query(conn=checkout.conn)
 
                 try:
@@ -265,9 +255,6 @@ class PooledDatabaseInterface:
                 except RecoverableDatabaseError as e:
                     if e.response.code != "57014":
                         raise
-
-            if scope.cancel_called:
-                logger.warning("Failed to cancel query", pid=checkout.conn._pid)
 
             raise
 
@@ -280,8 +267,6 @@ class PooledDatabaseInterface:
                     rollback_failed = e
 
             if checkout.conn.dead:
-                logger.warning("Pool connection dead", pid=checkout.conn._pid)
-
                 with anyio.CancelScope(shield=True):
                     try:
                         self._raw_connections.remove(checkout.conn)

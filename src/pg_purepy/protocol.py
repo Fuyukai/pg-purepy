@@ -9,12 +9,9 @@ import functools
 import struct
 from collections.abc import Callable, Collection, Mapping
 from hashlib import md5
-from itertools import count as it_count
 from typing import Any, Self
 
-import structlog
 from scramp import ScramClient  # pyright: ignore[reportMissingTypeStubs]
-from structlog.stdlib import BoundLogger
 
 from pg_purepy.conversion import apply_default_converters
 from pg_purepy.conversion.abc import ConversionContext, Converter
@@ -136,9 +133,6 @@ def unrecoverable_error[Self_: "SansIOClient"](
                 error.recoverable = True
             else:
                 self.state = ProtocolState.UNRECOVERABLE_ERROR
-                self._logger.critical(
-                    "Unrecoverable error", severity=error.severity, message=error.message
-                )
 
             return error
 
@@ -262,8 +256,6 @@ class SansIOClient:
     receives bytes from the server and turns them into Python-side structures.
     """
 
-    _LOGGER_COUNTER = it_count()
-
     PROTOCOL_MAJOR = 3
     PROTOCOL_MINOR = 0
 
@@ -292,8 +284,6 @@ class SansIOClient:
         :param ignore_unknown_types: If True, unknown types are returned as strings. Otherwise,
                                      raises an exception.
         """
-        if not logger_name:
-            logger_name = __name__ + f".protocol-{next(self._LOGGER_COUNTER)}"
 
         if database is None:
             database = username
@@ -353,9 +343,6 @@ class SansIOClient:
         # if the last receive started processing for a packet, but we didn't receive the full
         # data, we're currently processing a partial packet
         self._processing_partial_packet = False
-
-        self._logger: BoundLogger = structlog.get_logger(name=__name__)
-        self._logger = self._logger.bind(username=username, database=database)
 
         apply_default_converters(self)
 
@@ -421,8 +408,6 @@ class SansIOClient:
         else:
             self.connection_params[name] = value
 
-        self._logger.debug("Set parameter status", parameter=name, value=value)
-
         return ParameterStatus(name, value)
 
     def _decode_error_response(
@@ -455,9 +440,7 @@ class SansIOClient:
                 code = ErrorResponseFieldType.UNKNOWN
 
             str_field = body.read_cstring(encoding="ascii")
-            if code == ErrorResponseFieldType.UNKNOWN:
-                self._logger.warning("Unknown field type in error", field=str_field)
-            else:
+            if code != ErrorResponseFieldType.UNKNOWN:
                 kwargs[code.name.lower()] = str_field
 
         return ErrorOrNoticeResponse(**kwargs)
@@ -475,11 +458,8 @@ class SansIOClient:
             column_idx = body.read_short()
             type_oid = body.read_int()
 
-            if type_oid not in self.converters:
-                if self._ignore_unknown_types:
-                    self._logger.warning("Unknown type OID", oid=type_oid)
-                else:
-                    raise ProtocolParseError(f"Unknown type OID: {type_oid}")
+            if type_oid not in self.converters and not self._ignore_unknown_types:
+                raise ProtocolParseError(f"Unknown type OID: {type_oid}")
 
             type_size = body.read_short()
             type_mod = body.read_int()
@@ -714,11 +694,7 @@ class SansIOClient:
         if code == BackendMessageCode.ERROR_RESPONSE:
             # this is a recoverable error, and simply moves onto the ReadyForQuery message.
             self.state = ProtocolState.RECOVERABLE_ERROR
-            error = self._decode_error_response(body, recoverable=True, notice=False)
-            self._logger.warning(
-                "Recoverable error during query", severity=error.severity, message=error.message
-            )
-            return error
+            return self._decode_error_response(body, recoverable=True, notice=False)
 
         raise UnknownMessageError(f"Expected RowDescription, got {code!r}")
 
@@ -1138,7 +1114,6 @@ class SansIOClient:
                 self._buffer = self._buffer[size + 5 :]
 
         code = BackendMessageCode(code)
-        self._logger.debug("Incoming protocol message", code=code)
 
         try:
             method = getattr(self, f"_handle_during_{self.state.name}")

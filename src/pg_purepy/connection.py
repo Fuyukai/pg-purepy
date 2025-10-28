@@ -20,7 +20,6 @@ from typing import (
 import anyio
 import anyio.lowlevel
 import attrs
-import structlog
 from anyio import EndOfStream, ResourceGuard
 from anyio.abc import ByteStream, SocketStream
 from anyio.streams.tls import TLSStream
@@ -49,8 +48,6 @@ from pg_purepy.protocol import (
     SansIOClient,
     check_if_tls_accepted,
 )
-
-logger: structlog.stdlib.BoundLogger = structlog.get_logger(name=__name__)
 
 
 class RollbackTimeoutError(PostgresqlError):
@@ -93,7 +90,15 @@ class AsyncPostgresConnection:
 
         self._block_transactions = block_transactions
 
-        self._logger = logger.bind(database=state.database)
+    @property
+    def pid(self) -> int:
+        """
+        Returns the PostgreSQL process identifier for this connection.
+
+        This may be None for non-mainline implementations that don't support query cancellation.
+        """
+
+        return self._pid
 
     @property
     def ready(self) -> bool:
@@ -172,8 +177,10 @@ class AsyncPostgresConnection:
 
     async def _terminate(self) -> None:
         data = self._protocol.do_terminate()
-        await self._write(data)
-        self._dead = True
+        try:
+            await self._write(data)
+        finally:
+            self._dead = True
 
     async def _read_until_ready(
         self,
@@ -194,8 +201,6 @@ class AsyncPostgresConnection:
                         warnings.warn(str(err), stacklevel=2)
 
                 elif isinstance(next_event, BackendKeyData):
-                    self._logger = self._logger.bind(pid=next_event.pid)
-                    logger.debug("BackendKeyData")
                     self._secret_key = next_event.secret_key
                     self._pid = next_event.pid
 
@@ -294,7 +299,6 @@ class AsyncPostgresConnection:
                 max_rows is None,
             ))
 
-            logger.debug("Executing query", query=query)
             if simple_query:
                 data = self._protocol.do_simple_query(query)  # type: ignore
                 await self._write(data)
@@ -555,16 +559,12 @@ async def _open_socket(
     address_or_path = fspath(address_or_path)
     sock: SocketStream | TLSStream
     if address_or_path.startswith("/"):  # pragma: no cover
-        logger.debug("Opening connection", type="unix", path=address_or_path)
         sock = await anyio.connect_unix(address_or_path)
     else:
-        logger.debug("Opening connection", type="tcp", address=address_or_path, port=port)
         sock = await anyio.connect_tcp(remote_host=address_or_path, remote_port=port)
 
     try:
         if ssl_context:
-            logger.debug("Using TLS for connection")
-
             await sock.send(SSL_MESSAGE)
             response = await sock.receive(1)
             if not check_if_tls_accepted(response):

@@ -13,7 +13,6 @@ dependencies = [
     "attrs>=25.4.0",
     "python-dateutil>=2.9.0.post0",
     "anyio>=4.11.0",
-    "structlog>=24.4.0",
     "whenever>=0.9.3",
 ]
 name = "pg-purepy"
