@@ -12,12 +12,12 @@ jobs:
 
         steps:
             - name: "Checkout repository"
-              uses: "actions/checkout@v4"
+              uses: "actions/checkout@v5"
 
             - name: "Install Python 3.12"
-              uses: "actions/setup-python@v5"
+              uses: "actions/setup-python@v6"
               with:
-                  python-version: "3.12.9"
+                  python-version: "3.14"
 
             - name: Setup PDM
               uses: pdm-project/setup-pdm@v4
@@ -34,7 +34,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                postgres-version: ["17", "16", "15", "14", "13"]
+                postgres-version: ["18", "17", "16", "15", "14"]
 
         name: "Test on PostgreSQL ${{ matrix.postgres-version }}"
         runs-on: ubuntu-latest
@@ -52,12 +52,12 @@ jobs:
 
         steps:
             - name: "Checkout repository"
-              uses: "actions/checkout@v4"
+              uses: "actions/checkout@v5"
 
-            - name: "Install Python 3.12"
-              uses: "actions/setup-python@v5"
+            - name: "Install Python"
+              uses: "actions/setup-python@v6"
               with:
-                  python-version: "3.12.9"
+                  python-version: "3.13"
 
             - name: Setup PDM
               uses: pdm-project/setup-pdm@v4
