@@ -5,8 +5,7 @@ The AnyIO implementation of the PostgreSQL client.
 from __future__ import annotations
 
 import types
-import warnings
-from collections.abc import AsyncGenerator, AsyncIterator, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from contextlib import aclosing, asynccontextmanager
 from os import PathLike, fspath
 from ssl import SSLContext
@@ -49,6 +48,8 @@ from pg_purepy.protocol import (
     check_if_tls_accepted,
 )
 
+type NoticeCallback = Callable[[ErrorOrNoticeResponse], None]
+
 
 class RollbackTimeoutError(PostgresqlError):
     """
@@ -71,6 +72,7 @@ class AsyncPostgresConnection:
         stream: ByteStream,
         state: SansIOClient,
         block_transactions: bool = False,
+        notice_callback: NoticeCallback | None = None,
     ):
         self._addr = address_or_path
         self._port = port
@@ -89,6 +91,9 @@ class AsyncPostgresConnection:
         self._secret_key: int = -1
 
         self._block_transactions = block_transactions
+
+        #: The callable invoked when a notice or warning message arrives.
+        self.notice_callback = notice_callback
 
     @property
     def pid(self) -> int:
@@ -117,9 +122,12 @@ class AsyncPostgresConnection:
         return self._protocol.in_transaction
 
     @property
-    def dead(self) -> bool:
+    def unusable(self) -> bool:
         """
-        If this connection is unusable.
+        If this connection is somehow unusable.
+
+        There are a few ways this can be triggered: an error during read/write, an explicit
+        termination has been sent, or the protocol has hit an unrecoverable error.
         """
 
         if self._dead:
@@ -158,6 +166,9 @@ class AsyncPostgresConnection:
         return f"<{type(self).__name__} pid='{self._pid!r}'>"
 
     async def _read(self) -> bytes:
+        if self.unusable:
+            raise anyio.BrokenResourceError
+
         try:
             return await self._stream.receive()
         except (ConnectionError, EndOfStream):
@@ -165,6 +176,9 @@ class AsyncPostgresConnection:
             raise
 
     async def _write(self, item: bytes) -> None:
+        if self.unusable:
+            raise anyio.BrokenResourceError
+
         try:
             return await self._stream.send(item)
         except (ConnectionError, EndOfStream):
@@ -176,14 +190,19 @@ class AsyncPostgresConnection:
         await self._write(data)
 
     async def _terminate(self) -> None:
+        # ignores unusable attribute
+
         data = self._protocol.do_terminate()
         try:
-            await self._write(data)
+            await self._stream.send(data)
         finally:
             self._dead = True
 
     async def _read_until_ready(
         self,
+        *,
+        raise_server_errors: bool = False,
+        server_error_query: str | None = None,
     ) -> AsyncGenerator[ErrorOrNoticeResponse | PostgresMessage | NeedData]:
         if self._protocol.ready:
             await anyio.lowlevel.checkpoint()
@@ -195,10 +214,13 @@ class AsyncPostgresConnection:
                 if next_event is NEED_DATA:
                     break
 
-                if isinstance(next_event, ErrorOrNoticeResponse) and next_event.notice:
-                    if next_event.severity == "WARNING":
-                        err = wrap_error(next_event)
-                        warnings.warn(str(err), stacklevel=2)
+                if isinstance(next_event, ErrorOrNoticeResponse):
+                    # early intercept errors for e.g. wait_for_message
+                    if not next_event.notice and raise_server_errors:
+                        raise wrap_error(next_event, server_error_query)
+
+                    if next_event.notice and self.notice_callback:
+                        self.notice_callback(next_event)
 
                 elif isinstance(next_event, BackendKeyData):
                     self._secret_key = next_event.secret_key
@@ -224,11 +246,9 @@ class AsyncPostgresConnection:
         This will discard all other events on the connection.
         """
 
-        async with aclosing(self._read_until_ready()) as gen:
-            async for message in gen:
-                if isinstance(message, ErrorOrNoticeResponse):
-                    err = wrap_error(message)
-                    raise err
+        async with aclosing(self._read_until_ready(raise_server_errors=True)) as gen:
+            async for _ in gen:
+                pass
 
     async def _wait_for_message[T](self, typ: type[T], *, wait_until_ready: bool = True) -> T:
         """
@@ -238,17 +258,14 @@ class AsyncPostgresConnection:
         synchronisation if ``wait_until_ready`` is True. If it never arrives, this will deadlock!
         """
 
-        message_found = None
-        async with aclosing(self._read_until_ready()) as gen:
+        message_found: T | None = None
+        async with aclosing(self._read_until_ready(raise_server_errors=True)) as gen:
             async for item in gen:
                 if isinstance(item, typ):
                     if not wait_until_ready:
                         return item
 
                     message_found = item
-
-                elif isinstance(item, ErrorOrNoticeResponse):
-                    raise wrap_error(item)
 
             if message_found is None:
                 raise IllegalStateError(f"No message of type {typ} was yielded")
@@ -320,12 +337,8 @@ class AsyncPostgresConnection:
                 if info.row_description:
                     yield info.row_description
 
-            async with aclosing(self._read_until_ready()) as agen:
+            async with aclosing(self._read_until_ready(raise_server_errors=True)) as agen:
                 async for message in agen:
-                    if isinstance(message, ErrorOrNoticeResponse) and not message.notice:
-                        err = wrap_error(message)
-                        raise err
-
                     if isinstance(message, QueryResultMessage):
                         yield message
 
@@ -424,6 +437,7 @@ class AsyncPostgresConnection:
         query: str | PreparedStatementInfo,
         *params: Any,
         max_rows: int | None = None,
+        notice_callback: NoticeCallback | None = None,
         **kwargs: Any,
     ) -> list[DataRow]:
         """
@@ -435,6 +449,7 @@ class AsyncPostgresConnection:
                       or a :class:`~.PreparedStatementInfo` that represents a pre-prepared query.
         :param params: The positional arguments for the query.
         :param max_rows: The maximum rows to return.
+        :param notice_callback: Called every time a warning or notice is encountered.
         :param kwargs: The colon arguments for the query.
         """
 
@@ -459,10 +474,13 @@ class AsyncPostgresConnection:
             return None
 
     async def fetch_one(
-        self, query: str | PreparedStatementInfo, *params: Any, **kwargs: Any
+        self,
+        query: str | PreparedStatementInfo,
+        *params: Any,
+        **kwargs: Any,
     ) -> DataRow:
         """
-        Like :meth:`.fetch_one`, but raises :class:`.MissingRowError` if there's no row to fetch.
+        Like :meth:`.fetch_one_or_none`, but raises :class:`.MissingRowError` if there's no row.
         """
 
         if res := await self.fetch_one_or_none(query, *params, **kwargs):

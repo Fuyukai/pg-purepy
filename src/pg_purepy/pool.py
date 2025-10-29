@@ -17,6 +17,7 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 
 from pg_purepy.connection import (
     AsyncPostgresConnection,
+    NoticeCallback,
     RollbackTimeoutError,
     _open_connection,
     _open_socket,
@@ -67,6 +68,8 @@ class PooledDatabaseInterface:
 
         self._nursery = nursery
 
+        self._notice_callback: NoticeCallback | None = None
+
     async def _start(self, count: int) -> None:
         for _ in range(count):
             await self._open_new_connection()
@@ -94,6 +97,21 @@ class PooledDatabaseInterface:
         """
 
         return self._read.statistics().tasks_waiting_receive
+
+    @property
+    def notice_callback(self) -> NoticeCallback | None:  # pragma: no cover
+        """
+        The notice callback shared by all connections.
+        """
+
+        return self._notice_callback
+
+    @notice_callback.setter
+    def notice_callback(self, cb: NoticeCallback):  # pragma: no cover
+        self._notice_callback = cb
+
+        for conn in self._raw_connections:
+            conn.notice_callback = self._notice_callback
 
     @staticmethod
     async def _cancel_query(conn: AsyncPostgresConnection) -> None:
@@ -147,7 +165,7 @@ class PooledDatabaseInterface:
         forcibly_killed: list[OpenedConnection] = []
 
         async def kill(o: OpenedConnection) -> None:
-            if o.conn.dead:
+            if o.conn.unusable:
                 try:
                     # This *always* marks the connection as terminated, so even if this fails then
                     # .dead will be True for the second nursery.
@@ -266,7 +284,7 @@ class PooledDatabaseInterface:
                 except RollbackTimeoutError as e:
                     rollback_failed = e
 
-            if checkout.conn.dead:
+            if checkout.conn.unusable:
                 with anyio.CancelScope(shield=True):
                     try:
                         self._raw_connections.remove(checkout.conn)
@@ -295,45 +313,53 @@ class PooledDatabaseInterface:
         async with self.checkout_connection(start_new_transaction=True) as conn:
             yield conn
 
-    async def execute(self, query: str, *params: Any, **kwargs: Any) -> int:
+    async def execute(
+        self, query: str, *params: Any, notice_callback: NoticeCallback | None = None, **kwargs: Any
+    ) -> int:
         """
         Executes a query on the next available connection. See
         :meth:`.AsyncPostgresConnection.execute` for more information.
         """
 
         async with self.checkout_connection() as conn:
-            return await conn.execute(query, *params, **kwargs)
+            return await conn.execute(query, *params, notice_callback=notice_callback, **kwargs)
 
-    async def fetch(self, query: str, *params: Any, **kwargs: Any) -> list[DataRow]:
+    async def fetch(
+        self, query: str, *params: Any, notice_callback: NoticeCallback | None = None, **kwargs: Any
+    ) -> list[DataRow]:
         """
         Fetches the result of a query on the next available connection. See
         :meth:`.AsyncPostgresConnection.fetch` for more information.
         """
 
         async with self.checkout_connection() as conn:
-            return await conn.fetch(query, *params, **kwargs)
+            return await conn.fetch(query, *params, notice_callback=notice_callback, **kwargs)
 
     async def fetch_one(
         self,
         query: str,
         *params: Any,
+        notice_callback: NoticeCallback | None = None,
         **kwargs: Any,
     ) -> DataRow:
         """
-        Like :meth:`.fetch`, but only returns one row. See
-        :meth:`.AsyncPostgresConnection.fetch_one` for more information.
+        See :meth:`.AsyncPostgresConnection.fetch_one`.
         """
 
         async with self.checkout_connection() as conn:
-            return await conn.fetch_one(query, *params, **kwargs)
+            return await conn.fetch_one(query, *params, notice_callback=notice_callback, **kwargs)
 
-    async def fetch_one_or_none(self, query: str, *params: Any, **kwargs: Any) -> DataRow | None:
+    async def fetch_one_or_none(
+        self, query: str, *params: Any, notice_callback: NoticeCallback | None = None, **kwargs: Any
+    ) -> DataRow | None:
         """
         See :meth:`.AsyncPostgresConnection.fetch_one_or_none`.
         """
 
         async with self.checkout_connection() as conn:
-            return await conn.fetch_one_or_none(query, *params, **kwargs)
+            return await conn.fetch_one_or_none(
+                query, *params, notice_callback=notice_callback, **kwargs
+            )
 
     ## Utility Methods ##
     async def find_oid_for_type(self, type_name: str) -> int | None:

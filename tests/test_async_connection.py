@@ -6,14 +6,20 @@ import pytest
 import trio.testing
 from anyio import BusyResourceError
 from anyio.lowlevel import checkpoint
-from pg_purepy.connection import open_database_connection
-from pg_purepy.exc import MissingPasswordError, MissingRowError, ProtocolParseError
+from pg_purepy.connection import AsyncPostgresConnection, open_database_connection
+from pg_purepy.exc import (
+    IllegalStateError,
+    MissingPasswordError,
+    MissingRowError,
+    ProtocolParseError,
+)
 from pg_purepy.messages import (
     CommandComplete,
     DataRow,
     InvalidPasswordError,
     RecoverableDatabaseError,
     RowDescription,
+    UnrecoverableDatabaseError,
 )
 
 from tests.util import (
@@ -499,3 +505,13 @@ async def test_attempting_nested_queries():
         async for _ in q:
             with pytest.raises(BusyResourceError):
                 await conn.fetch_one("select 2;")
+
+
+async def test_query_after_fatal_error():
+    async with open_connection() as conn:
+        conn: AsyncPostgresConnection = conn
+        with pytest.raises(UnrecoverableDatabaseError):
+            await conn.execute("select pg_terminate_backend(pg_backend_pid());")
+
+        with pytest.raises(IllegalStateError):
+            await conn.execute("select 1;")

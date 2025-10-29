@@ -127,12 +127,14 @@ def unrecoverable_error[Self_: "SansIOClient"](
         self: Self_, code: BackendMessageCode, body: Buffer
     ) -> ErrorOrNoticeResponse | PostgresMessage:
         if code == BackendMessageCode.ERROR_RESPONSE:
-            error = self._decode_error_response(body, recoverable=False, notice=False)
+            error = self._decode_error_response(body, initial_recoverable=False, notice=False)
+
+            # hardcoded cancel intercept
             if error.code == "57014":
                 self.state = ProtocolState.RECOVERABLE_ERROR
                 error.recoverable = True
             else:
-                self.state = ProtocolState.UNRECOVERABLE_ERROR
+                self._apply_error(error)
 
             return error
 
@@ -414,14 +416,14 @@ class SansIOClient:
         self,
         body: Buffer,
         *,
-        recoverable: bool,
+        initial_recoverable: bool,
         notice: bool,
     ) -> ErrorOrNoticeResponse:
         """
-        Decodes an error response, returning the :class:`.ErrorOrNoticeResponse` containing all the
-        fields from the message.
+        Decodes an error response.
         """
-        kwargs: dict[str, Any] = {"recoverable": recoverable, "notice": notice}
+
+        kwargs: dict[str, Any] = {"notice": notice}
         ignored_codes: set[int] = {ord("F"), ord("L"), ord("R")}
 
         while body:
@@ -442,6 +444,15 @@ class SansIOClient:
             str_field = body.read_cstring(encoding="ascii")
             if code != ErrorResponseFieldType.UNKNOWN:
                 kwargs[code.name.lower()] = str_field
+
+        recoverable = initial_recoverable
+        level: str = kwargs["severity"]
+
+        # short circuit fatal errors which are nearly never recoverable.
+        if recoverable and level == "FATAL":
+            recoverable = False
+
+        kwargs["recoverable"] = recoverable
 
         return ErrorOrNoticeResponse(**kwargs)
 
@@ -523,6 +534,14 @@ class SansIOClient:
             row_count = None
 
         return CommandComplete(split[0], row_count)
+
+    def _apply_error(self, err: ErrorOrNoticeResponse) -> ErrorOrNoticeResponse:
+        if err.recoverable:
+            self.state = ProtocolState.RECOVERABLE_ERROR
+        else:
+            self.state = ProtocolState.UNRECOVERABLE_ERROR
+
+        return err
 
     _handle_during_STARTUP = "You need to call do_startup()!"
 
@@ -642,6 +661,7 @@ class SansIOClient:
         """
         Generic handler for when the server is ready for query.
         """
+
         if code == BackendMessageCode.READY_FOR_QUERY:
             return self._got_ready_for_query(body)
 
@@ -656,6 +676,7 @@ class SansIOClient:
         """
         Handles incoming messages once we've authenticated.
         """
+
         if code == BackendMessageCode.READY_FOR_QUERY:
             return self._got_ready_for_query(body)
 
@@ -692,9 +713,9 @@ class SansIOClient:
             return self._got_row_description(body)
 
         if code == BackendMessageCode.ERROR_RESPONSE:
-            # this is a recoverable error, and simply moves onto the ReadyForQuery message.
-            self.state = ProtocolState.RECOVERABLE_ERROR
-            return self._decode_error_response(body, recoverable=True, notice=False)
+            return self._apply_error(
+                self._decode_error_response(body, initial_recoverable=True, notice=False)
+            )
 
         raise UnknownMessageError(f"Expected RowDescription, got {code!r}")
 
@@ -747,9 +768,10 @@ class SansIOClient:
             return ParseComplete(self._last_named_query)
 
         if code == BackendMessageCode.ERROR_RESPONSE:
-            # bad query
-            self.state = ProtocolState.RECOVERABLE_ERROR
-            return self._decode_error_response(body, recoverable=True, notice=False)
+            # bad query?
+            return self._apply_error(
+                self._decode_error_response(body, initial_recoverable=True, notice=False)
+            )
 
         raise UnknownMessageError(f"Expected ParseComplete, got {code!r}")
 
@@ -824,8 +846,9 @@ class SansIOClient:
             return BindComplete()
 
         if code == BackendMessageCode.ERROR_RESPONSE:
-            self.state = ProtocolState.RECOVERABLE_ERROR
-            return self._decode_error_response(body, recoverable=True, notice=False)
+            return self._apply_error(
+                self._decode_error_response(body, initial_recoverable=True, notice=False)
+            )
 
         raise UnknownMessageError(f"Expected BindComplete, got {code!r}")
 
@@ -843,9 +866,9 @@ class SansIOClient:
             return self._decode_command_complete(body)
 
         if code == BackendMessageCode.ERROR_RESPONSE:
-            # TODO: Maybe check the code, and reraise as unrecoverable?
-            self.state = ProtocolState.RECOVERABLE_ERROR
-            return self._decode_error_response(body, recoverable=True, notice=False)
+            return self._apply_error(
+                self._decode_error_response(body, initial_recoverable=True, notice=False)
+            )
 
         if code == BackendMessageCode.PORTAL_SUSPENDED:
             self.state = ProtocolState.MULTI_QUERY_RECEIVED_PORTAL_SUSPENDED
@@ -1133,7 +1156,7 @@ class SansIOClient:
             return self._handle_parameter_status(buffer)
 
         if code == BackendMessageCode.NOTICE_RESPONSE:
-            return self._decode_error_response(body=buffer, recoverable=True, notice=True)
+            return self._decode_error_response(body=buffer, initial_recoverable=True, notice=True)
 
         # if we made it here, we can actually process the packet since we have it in full
 

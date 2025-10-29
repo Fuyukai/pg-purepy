@@ -16,7 +16,7 @@ dependencies = [
     "whenever>=0.9.3",
 ]
 name = "pg-purepy"
-version = "0.12.0"
+version = "0.12.1"
 description = "A pure-Python anyio-based PostgreSQL adapter."
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -56,7 +56,8 @@ source = ["pg_purepy"]
 [tool.coverage.report]
 exclude_lines = [
     "raise UnknownMessageError",  # this only happens if the postgresql server breaks
-    "pragma: no cover"  # default behaviour...
+    "pragma: no cover",  # default behaviour...
+    "if TYPE_CHECKING:"
 ]
 
 [tool.ruff]

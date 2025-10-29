@@ -1,6 +1,16 @@
 Changelog
 =========
 
+0.12.1 (2025-10-29)
+-------------------
+
+- Excised ``structlog`` from the code. This was useful to fix a few bugs, but ended up too spammy.
+
+- Notices and warnings can now be collected via a callback.
+
+- Error handling has been revamped. Fatal errors are properly collected as unrecoverable errors
+  rather than mistakenly being handled as recoverable errors.
+
 0.12.0 (2025-10-28)
 -------------------
 

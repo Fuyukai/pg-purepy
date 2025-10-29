@@ -198,6 +198,14 @@ variant.
 
 .. autoexception:: pg_purepy.messages.UnrecoverableDatabaseError
 
+Notice handling
+---------------
+
+Occasionally, the server will send additional server-side warnings and notices to the client. These
+can be collected with the ``notice_callback`` attribute on both the connection type and the
+pool type, which is a synchronous callback that takes a :class:`.ErrorOrNoticeResponse` as its only
+parameter. Useful for forwarding it to logs.
+
 Transaction Helpers
 -------------------
 
