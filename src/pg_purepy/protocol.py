@@ -474,7 +474,7 @@ class SansIOClient:
 
             type_size = body.read_short()
             type_mod = body.read_int()
-            format_code = body.read_short()  # noqa: F841, good for code explicitness
+            format_code = body.read_short()  # ruff: ignore[unused-variable], good for code explicitness
 
             desc = ColumnDescription(
                 name=name,
@@ -1131,7 +1131,7 @@ class SansIOClient:
                 # reset buffer, otherwise we try and read the message code off again >.>
                 self._buffer = bytearray()
                 return NEED_DATA
-            else:  # noqa: RET505
+            else:  # ruff: ignore[superfluous-else-return]
                 # yes enough data, set the buffer to the data after the size bytes for future
                 # processing
                 self._buffer = self._buffer[size + 5 :]
