@@ -53,7 +53,7 @@ async def test_pool_transactions():
     """
 
     async with open_pool(conn_count=1) as p:
-        with pytest.raises(RuntimeError):  # noqa: PT012
+        with pytest.raises(RuntimeError):  # ruff: ignore[pytest-raises-with-multiple-statements]
             async with p.checkout_in_transaction() as conn:
                 assert conn.in_transaction
                 await conn.execute(
