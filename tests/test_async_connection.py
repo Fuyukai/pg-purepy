@@ -177,7 +177,7 @@ async def test_empty_select_raises():
     """
 
     async with open_connection() as conn:
-        with pytest.raises(MissingRowError):  # noqa: PT012
+        with pytest.raises(MissingRowError):  # ruff: ignore[pytest-raises-with-multiple-statements]
             await conn.execute("create temporary table empty (_ int primary key);")
             await conn.fetch_one("select * from empty;")
 
@@ -223,7 +223,7 @@ async def test_transaction_helper_error():
     """
 
     async with open_connection() as conn:
-        with pytest.raises(ValueError):  # noqa: PT011, PT012
+        with pytest.raises(ValueError):  # ruff: ignore[pytest-raises-too-broad, pytest-raises-with-multiple-statements]
             async with conn.with_transaction():
                 assert conn.in_transaction
                 await conn.execute(
@@ -366,7 +366,7 @@ async def test_notices():
     """
 
     async with open_connection() as conn:
-        with pytest.warns(UserWarning):  # noqa: PT030
+        with pytest.warns(UserWarning):  # ruff: ignore[pytest-warns-too-broad]
             await conn.execute(
                 "DO language plpgsql $$ BEGIN RAISE WARNING 'hello, world!'; END $$;"
             )
